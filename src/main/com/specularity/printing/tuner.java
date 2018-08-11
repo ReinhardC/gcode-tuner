@@ -10,6 +10,7 @@ import javafx.stage.Stage;
 import main.com.specularity.printing.GCodes.GCode;
 import main.com.specularity.printing.GCodes.GCodeFactory;
 import main.com.specularity.printing.GCodes.GCodeGroup;
+import main.com.specularity.printing.GCodes.GCodeComment;
 
 import java.io.*;
 
@@ -49,22 +50,24 @@ public class tuner extends Application {
     }
 
     private void gGodeParse(File file) {
-        StringBuilder sb = new StringBuilder();
-
         try( FileInputStream fstream = new FileInputStream(file);
              DataInputStream dis = new DataInputStream(fstream);
              BufferedReader fileStream = new BufferedReader(new InputStreamReader(dis))
         ) {
             String line;
+            int nbLines = 0;
             while ((line = fileStream.readLine()) != null) {
+                nbLines++;
                 GCode gcode = GCodeFactory.produceFromString(line);
                 gCodeFile.gCodes.add(gcode);
             }
+
+            area.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodeComment)).count()+" commands in "+nbLines+" read.");
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        area.setText(String.valueOf(sb));
+
     }
 
     public static void main(String[] args) {

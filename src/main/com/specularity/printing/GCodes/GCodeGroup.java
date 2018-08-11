@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class GCodeGroup extends GCode {
-    public enum Type { FILE, LOOP }
+    public enum Type { FILE, LAYER, LOOP }
     public final Type type;
     public List<GCode> gCodes = new ArrayList<>();
 
