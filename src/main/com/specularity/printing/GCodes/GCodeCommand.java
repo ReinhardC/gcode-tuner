@@ -1,6 +1,4 @@
-package main.com.specularity.printing;
-
-import javafx.util.Pair;
+package main.com.specularity.printing.GCodes;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,8 +8,7 @@ class GCodeCommand extends GCode {
     private Character code;
     private Integer num;
 
-    GCodeCommand(String line, Character code, Integer num) {
-        super(line);
+    GCodeCommand(Character code, Integer num) {
         this.code = code;
         this.num = num;
     }

@@ -7,16 +7,16 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import main.com.specularity.printing.GCodes.GCode;
+import main.com.specularity.printing.GCodes.GCodeFactory;
+import main.com.specularity.printing.GCodes.GCodeGroup;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
 
 public class tuner extends Application {
 
     private TextArea area;
-
-    private List<GCode> gCodes = new ArrayList<>();
+    private GCodeGroup gCodeFile = new GCodeGroup(GCodeGroup.Type.FILE);
 
     @Override
     public void start(Stage primaryStage) {
@@ -58,7 +58,7 @@ public class tuner extends Application {
             String line;
             while ((line = fileStream.readLine()) != null) {
                 GCode gcode = GCodeFactory.produceFromString(line);
-                gCodes.add(gcode);
+                gCodeFile.gCodes.add(gcode);
             }
         } catch (IOException e) {
             e.printStackTrace();
