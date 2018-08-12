@@ -4,15 +4,14 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.layout.BorderPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import main.com.specularity.printing.GCodes.GCode;
-import main.com.specularity.printing.GCodes.GCodeFactory;
-import main.com.specularity.printing.GCodes.GCodeGroup;
-import main.com.specularity.printing.GCodes.GCodeComment;
+import main.com.specularity.printing.GCodes.*;
 
 import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
 
 public class tuner extends Application {
 
@@ -47,22 +46,63 @@ public class tuner extends Application {
         primaryStage.setTitle("GCode Tuner");
         primaryStage.setScene(scene);
         primaryStage.show();
+
+        File testfile = new File("D:\\Desktop\\dbg.gcode");
+        gGodeParse(testfile);
     }
 
     private void gGodeParse(File file) {
+        area.appendText("parsing gcode file " + file.getAbsolutePath() + ".\n");
         try( FileInputStream fstream = new FileInputStream(file);
              DataInputStream dis = new DataInputStream(fstream);
              BufferedReader fileStream = new BufferedReader(new InputStreamReader(dis))
         ) {
-            String line;
+            String strLine;
             int nbLines = 0;
-            while ((line = fileStream.readLine()) != null) {
+            while ((strLine = fileStream.readLine()) != null) {
                 nbLines++;
-                GCode gcode = GCodeFactory.produceFromString(line);
+                GCode gcode = GCodeFactory.produceFromString(strLine);
                 gCodeFile.gCodes.add(gcode);
             }
 
-            area.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodeComment)).count()+" commands in "+nbLines+" read.");
+            Map<Point3D, Integer> loop = new HashMap<>();
+
+            double last_z = 0;
+            int nbLoops = 0;
+            Point3D p = new Point3D(0,0,0);
+
+            for (int i = 0; i < gCodeFile.gCodes.size(); i++) {
+                int line = i + 1;
+                GCode gcode = gCodeFile.gCodes.get(i);
+
+                if(gcode instanceof GCodeCommand) {
+                    GCodeCommand cmd = (GCodeCommand)gcode;
+                    if(cmd.params.containsKey('X'))
+                        p.x = cmd.params.get('X');
+                    if(cmd.params.containsKey('Y'))
+                        p.y = cmd.params.get('Y');
+                    if(cmd.params.containsKey('Z'))
+                        p.z = cmd.params.get('Z');
+                }
+
+                if(last_z != p.z)
+                    loop.clear();
+                else {
+                    if (loop.containsKey(p)) {
+                        if(loop.size()>=3) {
+                            nbLoops++;
+                            area.appendText("loop found lines " + loop.get(p) + "-" + line + ".\n");
+                            loop.clear();
+                        }
+                    } else
+                        loop.put(p, line);
+                }
+
+                last_z = p.z;
+            }
+
+            area.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodeComment)).count()+" commands in "+nbLines+" lines read.\n");
+            area.appendText(nbLoops + " loops found.");
         } catch (IOException e) {
             e.printStackTrace();
         }
