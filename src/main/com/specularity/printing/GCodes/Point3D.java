@@ -3,6 +3,16 @@ package main.com.specularity.printing.GCodes;
 public class Point3D {
     public double x, y, z;
 
+    public Point3D(double x, double y, double z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    public Point3D(Point3D p) {
+        copyFrom(p);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -28,12 +38,9 @@ public class Point3D {
         return result;
     }
 
-    public Point3D(double x, double y, double z) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-
-
-
+    public void copyFrom(Point3D p) {
+        this.x = p.x;
+        this.y = p.y;
+        this.z = p.z;
     }
 }

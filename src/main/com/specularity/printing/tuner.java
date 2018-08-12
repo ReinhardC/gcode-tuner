@@ -10,8 +10,7 @@ import javafx.stage.Stage;
 import main.com.specularity.printing.GCodes.*;
 
 import java.io.*;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class tuner extends Application {
 
@@ -62,18 +61,28 @@ public class tuner extends Application {
             while ((strLine = fileStream.readLine()) != null) {
                 nbLines++;
                 GCode gcode = GCodeFactory.produceFromString(strLine);
+                gcode.originalLineNumber = nbLines;
                 gCodeFile.gCodes.add(gcode);
             }
 
-            Map<Point3D, Integer> loop = new HashMap<>();
+            // identify loops
+
+            List<GCode> oriCodes = gCodeFile.gCodes;
+            gCodeFile.gCodes = new ArrayList<>();
+
+            Map<Point3D, Integer> loopPoints = new HashMap<>();
+            GCodeGroup tmpGroup = new GCodeGroup(GCodeGroup.Type.TMP);
 
             double last_z = 0;
             int nbLoops = 0;
             Point3D p = new Point3D(0,0,0);
+            Point3D lastPointPut = new Point3D(p);
 
-            for (int i = 0; i < gCodeFile.gCodes.size(); i++) {
-                int line = i + 1;
-                GCode gcode = gCodeFile.gCodes.get(i);
+            for (int i = 0; i < oriCodes.size(); i++) {
+                GCode gcode = oriCodes.get(i);
+
+                tmpGroup.gCodes.add(gcode);
+                int curIx = tmpGroup.gCodes.size() - 1;
 
                 if(gcode instanceof GCodeCommand) {
                     GCodeCommand cmd = (GCodeCommand)gcode;
@@ -85,20 +94,50 @@ public class tuner extends Application {
                         p.z = cmd.params.get('Z');
                 }
 
-                if(last_z != p.z)
-                    loop.clear();
+                if(last_z != p.z) {
+                    // no loop found, z was changed
+                    gCodeFile.gCodes.addAll(tmpGroup.gCodes);
+                    loopPoints.clear();
+                    tmpGroup = new GCodeGroup(GCodeGroup.Type.TMP);
+                }
                 else {
-                    if (loop.containsKey(p)) {
-                        if(loop.size()>=3) {
+                    if (loopPoints.containsKey(p)) {
+                        if(!lastPointPut.equals(p)) {
                             nbLoops++;
-                            area.appendText("loop found lines " + loop.get(p) + "-" + line + ".\n");
-                            loop.clear();
+
+                            int firstLoopIx = loopPoints.get(p);
+
+                            area.appendText("loop found lines " + ((i+1) - (curIx-firstLoopIx)) + "-" + (i+1) + ".\n");
+
+                            gCodeFile.gCodes.addAll(tmpGroup.gCodes.subList(0, firstLoopIx ));
+
+                            GCodeGroup loopGroup = new GCodeGroup(GCodeGroup.Type.LOOP);
+                            loopGroup.gCodes.addAll(tmpGroup.gCodes.subList(firstLoopIx, curIx + 1));
+                            loopGroup.originalLineNumber = loopGroup.gCodes.get(0).originalLineNumber;
+                            gCodeFile.gCodes.add(loopGroup);
+
+                            loopPoints.clear();
+                            tmpGroup = new GCodeGroup(GCodeGroup.Type.TMP);
                         }
-                    } else
-                        loop.put(p, line);
+                    }
+                    else {
+                        loopPoints.put(p, curIx);
+                        lastPointPut.copyFrom(p);
+                    }
                 }
 
                 last_z = p.z;
+            }
+
+            PrintWriter writer = new PrintWriter(file.getAbsolutePath().replace(".gcode", "_2.gcode"), "UTF-8");
+            try {
+                gCodeFile.serialize(writer);
+            } catch (FileNotFoundException ex) {
+                // complain to user
+            } catch (IOException ex) {
+                // notify user
+            } finally {
+                writer.close();
             }
 
             area.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodeComment)).count()+" commands in "+nbLines+" lines read.\n");
