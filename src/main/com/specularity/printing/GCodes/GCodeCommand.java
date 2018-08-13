@@ -9,14 +9,12 @@ import java.util.Map;
 
 public class GCodeCommand extends GCode {
     public Map<Character, Double> params = new HashMap<>();
-    public String comment = "";
+    public String comment;
+    public String command;
 
-    private Character code;
-    private Integer num;
-
-    GCodeCommand(Character code, Integer num) {
-        this.code = code;
-        this.num = num;
+    public GCodeCommand(String command, String comment) {
+        this.command = command;
+        this.comment = comment;
     }
 
     @Override
@@ -28,7 +26,7 @@ public class GCodeCommand extends GCode {
         DecimalFormat d3 = new DecimalFormat("#0.000", symbols );
         DecimalFormat d5 = new DecimalFormat("#0.0000", symbols );
 
-        String out =   code.toString() + num + " " +
+        String out =   command + " " +
                         (params.containsKey('X') ? "X" + d3.format(params.get('X')) + " " : "") +
                         (params.containsKey('Y') ? "Y" + d3.format(params.get('Y')) + " " : "") +
                         (params.containsKey('Z') ? "Z" + d3.format(params.get('Z')) + " " : "") +
@@ -44,9 +42,12 @@ public class GCodeCommand extends GCode {
         if(out.equals("G92 E0.0000"))
             out = "G92 E0";
 
+        if(out.equals("G1 Y150.000"))
+            out = "G1 Y150";
+
         if(comment.equals(""))
-            file.write(out + "\n");
+            file.write(out + "\r\n");
         else
-            file.write(out + " " + comment + "\n");
+            file.write(out + " " + comment + "\r\n");
     }
 }

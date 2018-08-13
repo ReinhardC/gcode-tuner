@@ -27,17 +27,16 @@ public class GCodeFactory {
 
             Pair<Character, Double> cmdPair = getParamValuePair(tokens[0]);
             if(cmdPair != null) {
-                GCodeCommand cmd = new GCodeCommand(cmdPair.getKey(), cmdPair.getValue().intValue());
+                GCodeCommand command2;
+                command2 = new GCodeCommand(cmdPair.getKey() + "" + cmdPair.getValue().intValue(), comment);
                 for(int i=1; i<tokens.length; i++) {
                     String token = tokens[i];
                     Pair<Character, Double> parameter = getParamValuePair(token);
                     if(parameter == null)
                         break;
-                    cmd.params.put(parameter.getKey(), parameter.getValue());
+                    command2.params.put(parameter.getKey(), parameter.getValue());
                 }
-
-                cmd.comment = comment;
-                return cmd;
+                return command2;
             }
             else return null;
         }

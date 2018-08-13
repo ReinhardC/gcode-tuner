@@ -11,6 +11,6 @@ public class GCodeComment extends GCode {
 
     @Override
     public void serialize(PrintWriter file) throws IOException {
-        file.write(comment + "\n");
+        file.write(comment + "\r\n");
     }
 }
