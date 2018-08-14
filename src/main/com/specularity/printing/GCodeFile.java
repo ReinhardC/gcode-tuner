@@ -2,56 +2,62 @@ package main.com.specularity.printing;
 
 import main.com.specularity.printing.GCodes.*;
 
+import javax.vecmath.Point3d;
+import javax.vecmath.Vector2d;
 import java.io.*;
 import java.util.*;
+import java.util.stream.Stream;
 
-public class GCodeFile {
+class GCodeFile {
     private final File file;
-    private GCodeGroup fileGroup = new GCodeGroup(GCodeGroup.Type.FILE);
 
-    public GCodeFile(String filepath) {
+    List<GCode> gCodes = new ArrayList<>();
+
+    GCodeFile(String filepath) {
         file = new File(filepath);
     }
 
-    public void process() {
-        load();
-        groupLoops();
-        processLoops();
-        writeCopy();
-    }
+    void processPerimeters(double extension) {
+        for(GCode gCode: gCodes) {
+            if(gCode instanceof GCodePerimeter) {
+                GCodePerimeter perimeter = (GCodePerimeter) gCode;
 
-    private void processLoops() {
-        fileGroup.gCodes.forEach(gCode -> {
-            if(gCode instanceof GCodeGroup) {
-                GCodeGroup loop = (GCodeGroup) gCode;
+                if(perimeter.comment == null || !perimeter.comment.equals("; outer perimeter"))
+                    continue;
 
-                Optional<GCode> test = loop.gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).command.equals("G1")).findFirst();
+                perimeter.gCodes.add(0, new GCodeComment("; begin gcode tuner modified perimeter"));
+                perimeter.gCodes.add(new GCodeComment("; end gcode tuner modified perimeter"));
 
-                for (GCode code : loop.gCodes) {
-                    if(code instanceof GCodeCommand) {
-                        GCodeCommand cmd = (GCodeCommand)code;
-                        if(cmd.command.equals("G1")) {
+                GCodeCommand[] moves = perimeter.gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).command.equals("G1") && ((GCodeCommand) gCode1).has('X')).toArray(GCodeCommand[]::new);
 
-                        }
-                    }
-                }
+                Vector2d v1 = new  Vector2d(moves[1].get('X') - moves[0].get('X'), moves[1].get('Y') - moves[0].get('Y'));
+                Vector2d v2 = new  Vector2d(moves[2].get('X') - moves[1].get('X'), moves[2].get('Y') - moves[1].get('Y'));
+
+                double extrusionRate = 0.0;
+                if(moves[1].has('E'))
+                    extrusionRate = 100 * moves[1].get('E') / v1.length();
+
+                v1.normalize();
+                v1.scale(extension);
+
+                moves[0].put('X', moves[0].get('X') - v1.x);
+                moves[0].put('Y', moves[0].get('Y') - v1.y);
             }
-        });
-    }
-
-    public void writeCopy() {
-        PrintWriter writer = null;
-        try {
-            writer = new PrintWriter(file.getAbsolutePath().replace(".gcode", "_2.gcode"), "UTF-8");
-            fileGroup.serialize(writer);
-        } catch (IOException ex) {
-            // notify user
-        } finally {
-            writer.close();
         }
     }
 
-    public void load() {
+    String writeCopy() {
+        String newFileName = file.getAbsolutePath().replace(".gcode", "_tuned.gcode");
+        try (PrintWriter writer = new PrintWriter(newFileName, "UTF-8")) {
+            serialize(writer);
+        } catch (IOException ignored) {}
+        return newFileName;
+    }
+
+    /**
+     * load unprocessed gcodes
+     */
+    void load() {
         try (FileInputStream fstream = new FileInputStream(file);
              DataInputStream dis = new DataInputStream(fstream);
              BufferedReader fileStream = new BufferedReader(new InputStreamReader(dis))
@@ -61,70 +67,106 @@ public class GCodeFile {
             while ((strLine = fileStream.readLine()) != null) {
                 nbLines++;
                 GCode gcode = GCodeFactory.produceFromString(strLine);
-                gcode.originalLineNumber = nbLines;
-                fileGroup.gCodes.add(gcode);
+                if (gcode != null) {
+                    gcode.originalLineNumber = nbLines;
+                    gCodes.add(gcode);
+                }
             }
 
-        } catch (FileNotFoundException e) {
+        } catch (FileNotFoundException ignored) {
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public void groupLoops() {
-        List<GCode> oriCodes = fileGroup.gCodes;
-        fileGroup.gCodes = new ArrayList<>();
+    void groupPerimeters() {
+        List<GCode> oriCodes = gCodes;
+        gCodes = new ArrayList<>();
 
-        Map<Point3D, Integer> loopPoints = new HashMap<>();
-        GCodeGroup tmpGroup = new GCodeGroup(GCodeGroup.Type.TMP);
+        Map<Point3d, Integer> perimeterPoints = new HashMap<>();
 
         double last_z = 0;
-        Point3D p = new Point3D(0, 0, 0);
-        Point3D lastPointPut = new Point3D(p);
+        Point3d p = new Point3d(0, 0, 0);
+        Point3d lastPointPut = new Point3d(p);
+
+        List<GCode> gCodesTmp = new ArrayList<>();
 
         for (int i = 0; i < oriCodes.size(); i++) {
             GCode gcode = oriCodes.get(i);
-
-            tmpGroup.gCodes.add(gcode);
-            int curIx = tmpGroup.gCodes.size() - 1;
-
             if (gcode instanceof GCodeCommand) {
                 GCodeCommand cmd = (GCodeCommand) gcode;
-                if (cmd.params.containsKey('X'))
-                    p.x = cmd.params.get('X');
-                if (cmd.params.containsKey('Y'))
-                    p.y = cmd.params.get('Y');
-                if (cmd.params.containsKey('Z'))
-                    p.z = cmd.params.get('Z');
+                if (cmd.has('X'))
+                    p.x = cmd.get('X');
+                if (cmd.has('Y'))
+                    p.y = cmd.get('Y');
+                if (cmd.has('Z'))
+                    p.z = cmd.get('Z');
             }
 
+            // no loop found, either z was changed or eof
             if (last_z != p.z || i == oriCodes.size() - 1) {
-                // no loop found, z was changed, or last of gcodes
-                fileGroup.gCodes.addAll(tmpGroup.gCodes);
-                loopPoints.clear();
-                tmpGroup = new GCodeGroup(GCodeGroup.Type.TMP);
+                gCodes.addAll(gCodesTmp);
+
+                // add X and Y explicitly to beginning of perimeter so they can be changed
+                if (gcode instanceof GCodeCommand) {
+                    GCodeCommand cmd = (GCodeCommand) gcode;
+                    cmd.put('X', p.x);
+                    cmd.put('Y', p.y);
+                }
+
+                gCodesTmp.clear();
+                gCodesTmp.add(gcode);
+
+                perimeterPoints.clear();
+                perimeterPoints.put(p, 0);
+
+                lastPointPut.set(p.x, p.y, p.z);
             } else {
-                if (loopPoints.containsKey(p)) {
+                gCodesTmp.add(gcode);
+                int curIx = gCodesTmp.size() - 1;
+
+                if (perimeterPoints.containsKey(p)) {
                     if (!lastPointPut.equals(p)) {
-                        int firstLoopIx = loopPoints.get(p);
+                        int firstPerimeterPtIx = perimeterPoints.get(p);
 
-                        fileGroup.gCodes.addAll(tmpGroup.gCodes.subList(0, firstLoopIx));
+                        // bottom part
+                        gCodes.addAll(gCodesTmp.subList(0, firstPerimeterPtIx));
 
-                        GCodeGroup loopGroup = new GCodeGroup(GCodeGroup.Type.LOOP);
-                        loopGroup.gCodes.addAll(tmpGroup.gCodes.subList(firstLoopIx, curIx + 1));
-                        loopGroup.originalLineNumber = loopGroup.gCodes.get(0).originalLineNumber;
-                        fileGroup.gCodes.add(loopGroup);
+                        // top part
+                        GCodePerimeter perimeterGroup = new GCodePerimeter();
+                        perimeterGroup.gCodes.addAll(gCodesTmp.subList(firstPerimeterPtIx, curIx + 1));
+                        perimeterGroup.originalLineNumber = perimeterGroup.gCodes.get(0).originalLineNumber;
 
-                        loopPoints.clear();
-                        tmpGroup = new GCodeGroup(GCodeGroup.Type.TMP);
+                        // possible perimeter comment from file
+                        int j = 0;
+                        while(j++ < 5)
+                            if(firstPerimeterPtIx-j >= 0 && gCodesTmp.get(firstPerimeterPtIx - j).comment != null) {
+                                perimeterGroup.comment = gCodesTmp.get(firstPerimeterPtIx - j).comment;
+                                break;
+                            }
+
+                        perimeterGroup.updateBbx();
+
+                        gCodes.add(perimeterGroup);
+
+                        perimeterPoints.clear();
+                        gCodesTmp.clear();
                     }
                 } else {
-                    loopPoints.put(p, curIx);
-                    lastPointPut.copyFrom(p);
+                    perimeterPoints.put(p, curIx);
+                    lastPointPut.set(p.x, p.y, p.z);
                 }
             }
 
             last_z = p.z;
         }
+    }
+
+    Stream<GCode> getPerimeters() {
+        return gCodes.stream().filter(gCode -> gCode instanceof GCodePerimeter);
+    }
+
+    private void serialize(PrintWriter file) throws IOException {
+        for (GCode gCode : gCodes) gCode.serialize(file);
     }
 }

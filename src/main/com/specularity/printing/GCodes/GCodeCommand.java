@@ -1,53 +1,65 @@
-    package main.com.specularity.printing.GCodes;
+package main.com.specularity.printing.GCodes;
 
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class GCodeCommand extends GCode {
-    public Map<Character, Double> params = new HashMap<>();
-    public String comment;
+
+    private static DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.ENGLISH);
+    private static DecimalFormat d0 = new DecimalFormat("#0", symbols );
+    private static DecimalFormat d3 = new DecimalFormat("#0.000", symbols );
+    private static DecimalFormat d5 = new DecimalFormat("#0.0000", symbols );
+
+    private Map<Character, Double> params = new HashMap<>();
     public String command;
 
-    public GCodeCommand(String command, String comment) {
+    GCodeCommand(String command, String comment) {
         this.command = command;
         this.comment = comment;
     }
 
-    @Override
-    public void serialize(PrintWriter file) throws IOException {
-        DecimalFormatSymbols symbols = new DecimalFormatSymbols();
-        symbols.setDecimalSeparator('.');
-
-        DecimalFormat d0 = new DecimalFormat("#0", symbols );
-        DecimalFormat d3 = new DecimalFormat("#0.000", symbols );
-        DecimalFormat d5 = new DecimalFormat("#0.0000", symbols );
-
-        String out =   command + " " +
-                        (params.containsKey('X') ? "X" + d3.format(params.get('X')) + " " : "") +
-                        (params.containsKey('Y') ? "Y" + d3.format(params.get('Y')) + " " : "") +
-                        (params.containsKey('Z') ? "Z" + d3.format(params.get('Z')) + " " : "") +
-                        (params.containsKey('E') ? "E" + d5.format(params.get('E')) + " " : "") +
-                        (params.containsKey('F') ? "F" + d0.format(params.get('F')) + " " : "") +
-                        (params.containsKey('P') ? "P" + d0.format(params.get('P')) + " " : "") +
-                        (params.containsKey('S') ? "S" + d0.format(params.get('S')) + " " : "") +
-                        (params.containsKey('T') ? "T" + d0.format(params.get('T')) + " " : "");
-
-        while(out.charAt(out.length()-1) == ' ')
-            out = out.substring(0, out.length()-1);
-
-        if(out.equals("G92 E0.0000"))
-            out = "G92 E0";
-
-        if(out.equals("G1 Y150.000"))
-            out = "G1 Y150";
-
-        if(comment.equals(""))
-            file.write(out + "\r\n");
-        else
-            file.write(out + " " + comment + "\r\n");
+    public double get(char c) {
+        return params.get(c);
     }
+
+    public void put(char c, double v) {
+        params.put(c, v);
+    }
+
+    public boolean has(char c) {
+        return params.containsKey(c);
+    }
+
+    @Override
+    public String toString() {
+        String toString = command + " " +
+                (params.containsKey('X') ? "X" + d3.format(params.get('X')) + " " : "") +
+                (params.containsKey('Y') ? "Y" + d3.format(params.get('Y')) + " " : "") +
+                (params.containsKey('Z') ? "Z" + d3.format(params.get('Z')) + " " : "") +
+                (params.containsKey('E') ? "E" + d5.format(params.get('E')) + " " : "") +
+                (params.containsKey('F') ? "F" + d0.format(params.get('F')) + " " : "") +
+                (params.containsKey('P') ? "P" + d0.format(params.get('P')) + " " : "") +
+                (params.containsKey('S') ? "S" + d0.format(params.get('S')) + " " : "") +
+                (params.containsKey('T') ? "T" + d0.format(params.get('T')) + " " : "");
+
+        while(toString.charAt(toString.length()-1) == ' ')
+            toString = toString.substring(0, toString.length()-1);
+
+        if(comment != null && !comment.equals(""))
+            toString += " " + comment;
+
+        if(toString.equals("G92 E0.0000"))
+            toString = "G92 E0";
+
+        return toString;
+    }
+
+    @Override
+    public void serialize(PrintWriter file) { file.write(toString() + "\r\n"); }
 }
+

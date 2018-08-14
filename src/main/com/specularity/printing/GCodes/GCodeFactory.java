@@ -15,7 +15,7 @@ public class GCodeFactory {
         if(commentPos == 0)
             return new GCodeComment(line);
         else {
-            String comment = "";
+            String comment = null;
             if(commentPos >= 0)
                 comment = line.substring(commentPos);
             else
@@ -34,7 +34,7 @@ public class GCodeFactory {
                     Pair<Character, Double> parameter = getParamValuePair(token);
                     if(parameter == null)
                         break;
-                    command2.params.put(parameter.getKey(), parameter.getValue());
+                    command2.put(parameter.getKey(), parameter.getValue());
                 }
                 return command2;
             }
