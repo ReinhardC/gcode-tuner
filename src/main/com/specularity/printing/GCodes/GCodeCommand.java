@@ -18,7 +18,7 @@ public class GCodeCommand extends GCode {
     private Map<Character, Double> params = new HashMap<>();
     public String command;
 
-    GCodeCommand(String command, String comment) {
+    public GCodeCommand(String command, String comment) {
         this.command = command;
         this.comment = comment;
     }

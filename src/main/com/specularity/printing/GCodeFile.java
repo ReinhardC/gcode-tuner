@@ -30,18 +30,24 @@ class GCodeFile {
 
                 GCodeCommand[] moves = perimeter.gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).command.equals("G1") && ((GCodeCommand) gCode1).has('X')).toArray(GCodeCommand[]::new);
 
+                int LAST = moves.length-1;
                 Vector2d v1 = new  Vector2d(moves[1].get('X') - moves[0].get('X'), moves[1].get('Y') - moves[0].get('Y'));
-                Vector2d v2 = new  Vector2d(moves[2].get('X') - moves[1].get('X'), moves[2].get('Y') - moves[1].get('Y'));
+                Vector2d v2 = new  Vector2d(moves[LAST].get('X') - moves[LAST-1].get('X'), moves[LAST].get('Y') - moves[LAST-1].get('Y'));
 
                 double extrusionRate = 0.0;
                 if(moves[1].has('E'))
                     extrusionRate = 100 * moves[1].get('E') / v1.length();
 
-                v1.normalize();
-                v1.scale(extension);
+                v2.normalize();
+                v2.scale(extension);
 
-                moves[0].put('X', moves[0].get('X') - v1.x);
-                moves[0].put('Y', moves[0].get('Y') - v1.y);
+                GCodeCommand cmd = new GCodeCommand("G1", "; inserted by tuner");
+                cmd.put('X', moves[0].get('X') - v2.x);
+                cmd.put('Y', moves[0].get('Y') - v2.y);
+                perimeter.gCodes.add(1, cmd);
+
+                //moves[0].put('X', moves[0].get('X') - v1.x);
+                //moves[0].put('Y', moves[0].get('Y') - v1.y);
             }
         }
     }
@@ -140,8 +146,8 @@ class GCodeFile {
                         // possible perimeter comment from file
                         int j = 0;
                         while(j++ < 5)
-                            if(firstPerimeterPtIx-j >= 0 && gCodesTmp.get(firstPerimeterPtIx - j).comment != null) {
-                                perimeterGroup.comment = gCodesTmp.get(firstPerimeterPtIx - j).comment;
+                            if(perimeterGroup.originalLineNumber - j >= 0 && oriCodes.get(perimeterGroup.originalLineNumber - j).comment != null) {
+                                perimeterGroup.comment = oriCodes.get(perimeterGroup.originalLineNumber - j).comment;
                                 break;
                             }
 

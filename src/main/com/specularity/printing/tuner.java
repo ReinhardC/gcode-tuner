@@ -51,7 +51,9 @@ public class tuner extends Application {
         btnTune.setOnAction(event -> {
             if(gCodeFile != null) {
                 gCodeFile.processPerimeters(Double.parseDouble(extensionWidth.getText()));
-                logArea.appendText("tuning complete, perimeter starting points extended by " + Double.parseDouble(extensionWidth.getText()) + "mm. Please write now.\n");
+                logArea.appendText("tuning complete, perimeter starting points extended by " + Double.parseDouble(extensionWidth.getText()) + "mm. writing now.\n");
+                String fileName = gCodeFile.writeCopy();
+                logArea.appendText("tuned file written to " + fileName +".\n");
             } else logArea.appendText("no file\n");
 
         });
@@ -60,27 +62,17 @@ public class tuner extends Application {
         extensionWidth.setText("0.33");
         extensionWidth.setTooltip(new Tooltip("length of extension in mm"));
 
-        Button btnWrite = new Button();
-        btnWrite.setText("Write modified GCode");
-        btnWrite.setOnAction(event -> {
-            if(gCodeFile != null) {
-                String fileName = gCodeFile.writeCopy();
-                logArea.appendText("tuned file written to " + fileName +".\n");
-            } else logArea.appendText("no file\n");
-        });
-
         logArea = new TextArea();
 
         // A layout container for UI controls
         final BorderPane root = new BorderPane();
         root.setCenter(logArea);
-        root.setTop(new HBox(btnBrowseGCode, extensionWidth, btnTune, btnWrite));
+        root.setTop(new HBox(btnBrowseGCode, extensionWidth, btnTune));
         BorderPane.setMargin(logArea, new Insets(0,12,12,12));
 
         HBox.setMargin(btnBrowseGCode, new Insets(12,18,12,12));
         HBox.setMargin(extensionWidth, new Insets(12,2,12,0));
         HBox.setMargin(btnTune, new Insets(12,18,12,0));
-        HBox.setMargin(btnWrite, new Insets(12,18,12,0));
 
         // Top level container for all view content
         Scene scene = new Scene(root, 800, 550);
