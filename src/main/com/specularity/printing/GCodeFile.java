@@ -26,18 +26,18 @@ class GCodeFile {
                     continue;
 
                 perimeter.gCodes.add(0, new GCodeComment("; begin gcode tuner modified perimeter"));
-                perimeter.gCodes.add(new GCodeComment("; end gcode tuner modified perimeter"));
 
                 GCodeCommand[] moves = perimeter.gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).command.equals("G1") && ((GCodeCommand) gCode1).has('X')).toArray(GCodeCommand[]::new);
 
                 int LAST = moves.length-1;
-                Vector2d v1 = new  Vector2d(moves[1].get('X') - moves[0].get('X'), moves[1].get('Y') - moves[0].get('Y'));
-                Vector2d v2 = new  Vector2d(moves[LAST].get('X') - moves[LAST-1].get('X'), moves[LAST].get('Y') - moves[LAST-1].get('Y'));
+
 
                 double extrusionRate = 0.0;
-                if(moves[1].has('E'))
+                if(moves[1].has('E')) {
                     extrusionRate = 100 * moves[1].get('E') / v1.length();
+                }
 
+                Vector2d v2 = new  Vector2d(moves[LAST].get('X') - moves[LAST-1].get('X'), moves[LAST].get('Y') - moves[LAST-1].get('Y'));
                 v2.normalize();
                 v2.scale(extension);
 
@@ -45,6 +45,18 @@ class GCodeFile {
                 cmd.put('X', moves[0].get('X') - v2.x);
                 cmd.put('Y', moves[0].get('Y') - v2.y);
                 perimeter.gCodes.add(1, cmd);
+
+                Vector2d v1 = new  Vector2d(moves[1].get('X') - moves[0].get('X'), moves[1].get('Y') - moves[0].get('Y'));
+                v1.normalize();
+                v1.scale(extension * 2);
+
+                GCodeCommand cmd2 = new GCodeCommand("G1", "; inserted by tuner");
+                cmd2.put('X', moves[LAST].get('X') + v1.x);
+                cmd2.put('Y', moves[LAST].get('Y') + v1.y);
+                cmd2.put('E', moves[LAST].get('E') + (v1.length() * extrusionRate) / 100.0);
+                perimeter.gCodes.add(cmd2);
+
+                perimeter.gCodes.add(new GCodeComment("; end gcode tuner modified perimeter"));
 
                 //moves[0].put('X', moves[0].get('X') - v1.x);
                 //moves[0].put('Y', moves[0].get('Y') - v1.y);
