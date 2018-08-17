@@ -6,6 +6,7 @@ import javax.vecmath.Point3d;
 import javax.vecmath.Vector2d;
 import java.io.*;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 class GCodeFile {
@@ -22,15 +23,24 @@ class GCodeFile {
             if(gCode instanceof GCodePerimeter) {
                 GCodePerimeter perimeter = (GCodePerimeter) gCode;
 
-                if(perimeter.comment == null || !perimeter.comment.equals("; outer perimeter"))
-                    continue;
+                //if(perimeter.comment == null || !perimeter.comment.equals("; outer perimeter"))
+                //    continue;
 
                 perimeter.gCodes.add(0, new GCodeComment("; begin gcode tuner modified perimeter"));
 
-                GCodeCommand[] moves = perimeter.gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).command.equals("G1") && ((GCodeCommand) gCode1).has('X')).toArray(GCodeCommand[]::new);
+                double eRate = perimeter.getExtrusionRate();
+
+                List<Vector2d> moves = perimeter.gCodes.stream()
+                        .filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).isPosition())
+                        .map(gCode1 -> new Vector2d(((GCodeCommand) gCode1).get('X'), ((GCodeCommand) gCode1).get('Y'))).collect(Collectors.toList());
+
+                int i = moves.size();
+
+                /*
+
+                GCodeCommand[] moves = perimeter.gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).isPosition()).toArray(GCodeCommand[]::new);
 
                 int LAST = moves.length-1;
-
 
                 double extrusionRate = 0.0;
                 if(moves[1].has('E')) {
@@ -60,6 +70,7 @@ class GCodeFile {
 
                 //moves[0].put('X', moves[0].get('X') - v1.x);
                 //moves[0].put('Y', moves[0].get('Y') - v1.y);
+                */
             }
         }
     }
