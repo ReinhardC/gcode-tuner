@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 class GCodeFile {
     private final File file;
 
+
     List<GCode> gCodes = new ArrayList<>();
 
     GCodeFile(String filepath) {
@@ -36,7 +37,10 @@ class GCodeFile {
 
                 int i = moves.size();
 
-                /*
+
+
+                 /* -0.1mm 10%
+                /* -0.5mm
 
                 GCodeCommand[] moves = perimeter.gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).isPosition()).toArray(GCodeCommand[]::new);
 

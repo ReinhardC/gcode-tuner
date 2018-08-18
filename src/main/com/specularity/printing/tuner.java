@@ -1,17 +1,28 @@
 package main.com.specularity.printing;
 
 import javafx.application.Application;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.converter.DoubleStringConverter;
+import javafx.util.converter.FormatStringConverter;
 import main.com.specularity.printing.GCodes.*;
 
 import java.io.*;
+import java.text.FieldPosition;
+import java.text.Format;
+import java.text.ParsePosition;
 import java.util.prefs.Preferences;
+
+import static javafx.scene.control.cell.TextFieldTableCell.forTableColumn;
 
 public class tuner extends Application {
 
@@ -20,11 +31,30 @@ public class tuner extends Application {
     private Button btnTune = new Button("Tune GCode");
     private Button btnBrowseGCode = new Button("Open a GCode File");
 
+    private TableView<TestData> tv = new TableView<>();
+
     private GCodeFile gCodeFile = null;
 
     @Override
     public void start(Stage primaryStage)
     {
+        ObservableList<TestData> data = FXCollections.observableArrayList(
+                new TestData(1.,0.),
+                new TestData(100.,0.));
+
+        TableColumn<TestData, Double> tc1 = new TableColumn<>("From");
+        tc1.setCellValueFactory(new PropertyValueFactory<>("a"));
+
+        TableColumn<TestData, Double> tc2 = new TableColumn<>("To");
+        tc2.setCellValueFactory(new PropertyValueFactory<>("b"));
+        tc2.setCellFactory(TextFieldTableCell.forTableColumn(new DoubleStringConverter()));
+        tc2.setOnEditCommit( (TableColumn.CellEditEvent<TestData, Double> event) -> {});
+        tc2.setEditable(true);
+
+        tv.setEditable(true);
+        tv.getColumns().addAll(tc1, tc2);
+        tv.setItems(data);
+
         btnBrowseGCode.setOnAction(event -> {
             Preferences preferences = Preferences.userNodeForPackage(tuner.class);
             String initDir = preferences.get("lastDirectoryBrowsed", null);
@@ -66,7 +96,7 @@ public class tuner extends Application {
 
         // A layout container for UI controls
         final BorderPane root = new BorderPane();
-        root.setCenter(logArea);
+        root.setCenter(tv);
         root.setTop(new HBox(btnBrowseGCode, extensionWidth, btnTune));
         BorderPane.setMargin(logArea, new Insets(0,12,12,12));
 
