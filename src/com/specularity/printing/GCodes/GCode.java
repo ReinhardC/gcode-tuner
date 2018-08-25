@@ -1,4 +1,4 @@
-package main.com.specularity.printing.GCodes;
+package com.specularity.printing.GCodes;
 
 import java.io.IOException;
 import java.io.PrintWriter;

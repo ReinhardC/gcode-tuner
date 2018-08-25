@@ -1,6 +1,6 @@
-package main.com.specularity.printing.GCodes;
+package com.specularity.printing.GCodes;
 
-import java.io.IOException;
+import javax.vecmath.Vector2d;
 import java.io.PrintWriter;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -33,6 +33,11 @@ public class GCodeCommand extends GCode {
 
     public boolean has(char c) {
         return params.containsKey(c);
+    }
+
+    public void putVector2d(Vector2d v) {
+        params.put('X', v.x);
+        params.put('Y', v.y);
     }
 
     @Override

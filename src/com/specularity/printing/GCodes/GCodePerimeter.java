@@ -1,4 +1,4 @@
-package main.com.specularity.printing.GCodes;
+package com.specularity.printing.GCodes;
 
 import javax.vecmath.Vector2d;
 import java.io.IOException;
@@ -48,10 +48,10 @@ public class GCodePerimeter extends GCode {
     }
 
     /**
-     * getExtrusionRate
-     * @return extrusion rate in mm/traveled mm
+     * getExtrudeFactor
+     * @return extrusion length in mm/traveled mm
      */
-    public double getExtrusionRate() {
+    public double getExtrudeFactor() {
         double rate = 0.0;
         for (int i=1; i<gCodes.size(); i++) {
             GCode code_last = gCodes.get(i-1);
@@ -65,7 +65,7 @@ public class GCodePerimeter extends GCode {
 
             if(cmd.isPosition() && cmd_last.isPosition() && cmd.comment == null && cmd.has('E') && cmd_last.has('E')) {
                 Vector2d v = new  Vector2d(cmd.get('X') - cmd_last.get('X'), cmd.get('Y') - cmd_last.get('Y'));
-                return (cmd.get('E')*10 - cmd_last.get('E')*10) / v.length(); // extrusion to mm
+                return (cmd.get('E') - cmd_last.get('E')) / v.length(); // extrusion to mm
             }
         }
         return 0.0;

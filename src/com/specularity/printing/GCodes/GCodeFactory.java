@@ -1,4 +1,4 @@
-package main.com.specularity.printing.GCodes;
+package com.specularity.printing.GCodes;
 
 import javafx.util.Pair;
 

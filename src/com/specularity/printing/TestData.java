@@ -1,4 +1,4 @@
-package main.com.specularity.printing;
+package com.specularity.printing;
 
 public class TestData {
     private Double a, b;
