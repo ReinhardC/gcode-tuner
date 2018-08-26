@@ -3,8 +3,6 @@ package com.specularity.printing;
 import javax.vecmath.Vector2d;
 import java.util.*;
 
-import static java.lang.Math.abs;
-
 public class VectorTools {
 
     public static List<Vector2d> resamplePath(List<Vector2d> input, double from, double to) {

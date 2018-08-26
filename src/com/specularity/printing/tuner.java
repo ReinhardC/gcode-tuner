@@ -75,7 +75,7 @@ public class tuner extends Application {
                 logArea.appendText(gCodeFile.gCodes.size() + " after grouping\n");
                 logArea.appendText(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)\n");
                 logArea.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other\n");
-                logArea.appendText(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodes.size()).sum() + " inside groups\n");
+                logArea.appendText(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesMoves.size()).sum() + " inside groups\n");
             }
         });
 
@@ -105,7 +105,7 @@ public class tuner extends Application {
         primaryStage.setScene(scene);
         primaryStage.show();
 
-        gCodeFile = new GCodeFile("D:\\Desktop\\dbg.gcode");
+        gCodeFile = new GCodeFile("D:\\Desktop\\g\\dbg.gcode");
         gCodeFile.load();
         gCodeFile.groupPerimeters();
     }

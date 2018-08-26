@@ -1,12 +1,11 @@
 package com.specularity.printing.GCodes;
 
-import javax.vecmath.Vector2d;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
-public class GCodePerimeter extends GCode {
+public class GCodeExtrudedPath extends GCode {
     public List<GCode> gCodesMoves = new ArrayList<>();
     private double bbxMinX, bbxMaxX, bbxMinY, bbxMaxY;
 

@@ -8,7 +8,6 @@ import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 import static com.specularity.printing.VectorTools.*;
 import static com.specularity.printing.tuner.setPointsEnd;
 import static com.specularity.printing.tuner.setPointsStart;
@@ -33,11 +32,11 @@ class GCodeFile {
                 //if(perimeter.comment == null || !perimeter.comment.equals("; outer perimeter"))
                 //    continue;
 
-                perimeter.gCodes.add(0, new GCodeComment("; begin gcode tuner modified perimeter"));
+                perimeter.gCodesMoves.add(0, new GCodeComment("; begin gcode tuner modified perimeter"));
 
-                double perimeterExtrudeFactor = perimeter.getExtrudeFactor();
+                double perimeterExtrudeFactor = Heuristics.getExtrudeFactor(perimeter.gCodesMoves);
 
-                List<Vector2d> originalMoves = perimeter.gCodes.stream()
+                List<Vector2d> originalMoves = perimeter.gCodesMoves.stream()
                         .filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).isPosition())
                         .map(gCode1 -> new Vector2d(((GCodeCommand) gCode1).get('X'), ((GCodeCommand) gCode1).get('Y'))).collect(Collectors.toList());
 
@@ -47,12 +46,12 @@ class GCodeFile {
                 Vector2d pathOffset = new Vector2d(0.0, 0.0); // used for rotation
 
                 Vector2d previousMove = null;
-                double nextExtrusion = 0.0;
+                double nextExtrusionPoint = 0.0;
 
                 ArrayList<GCode> newMoves = new ArrayList<>();
 
                 //
-                // replace start of extrusion
+                // replace start of extruded path
                 //
                 // reversed so the rotation can be applied to the points
                 //
@@ -92,9 +91,9 @@ class GCodeFile {
                         newMove.putVector2d(v);
                         if(previousMove != null) {
                             previousMove.sub(v);
-                            nextExtrusion += previousMove.length() * perimeterExtrudeFactor * (setPointsStart.get(i+1).getExtrusionPct() / 100);
+                            nextExtrusionPoint += previousMove.length() * perimeterExtrudeFactor * (setPointsStart.get(i+1).getExtrusionPct() / 100);
                         }
-                        newMove.put('E', nextExtrusion);
+                        newMove.put('E', nextExtrusionPoint);
                         newMoves.add(newMove);
                         previousMove = v;
                     }
@@ -104,23 +103,23 @@ class GCodeFile {
                 //                       REPLACE MAIN EXTRUSION
                 //
 
-                List<Vector2d> mainExtrusion = resamplePath(originalMoves, setPointsStart.get(setPointsStart.size() - 1).getOffset(), getCycleLength(originalMoves) + setPointsEnd.get(0).getOffset());
-                mainExtrusion.remove(0);
-                System.out.println(mainExtrusion + " (mainExtrusion with 100)");
-                for (Vector2d v : mainExtrusion) {
+                List<Vector2d> mainExtrudedPath = resamplePath(originalMoves, setPointsStart.get(setPointsStart.size() - 1).getOffset(), getCycleLength(originalMoves) + setPointsEnd.get(0).getOffset());
+                mainExtrudedPath.remove(0);
+                System.out.println(mainExtrudedPath + " (mainExtrudedPath with 100)");
+                for (Vector2d v : mainExtrudedPath) {
                     GCodeCommand newMove = new GCodeCommand("G1", null);
                     newMove.putVector2d(v);
                     if(previousMove != null) {
                         previousMove.sub(v);
-                        nextExtrusion += previousMove.length() * perimeterExtrudeFactor;
+                        nextExtrusionPoint += previousMove.length() * perimeterExtrudeFactor;
                     }
-                    newMove.put('E', nextExtrusion);
+                    newMove.put('E', nextExtrusionPoint);
                     newMoves.add(newMove);
                     previousMove = v;
                 }
 
                 //
-                // replace end of extrusion
+                // replace end of extruded path
                 //
 
                 pathOffset.set(0., 0.);
@@ -152,9 +151,9 @@ class GCodeFile {
                         newMove.putVector2d(v);
                         if(previousMove != null) {
                             previousMove.sub(v);
-                            nextExtrusion += previousMove.length() * perimeterExtrudeFactor * (setPointsEnd.get(i+1).getExtrusionPct() / 100);
+                            nextExtrusionPoint += previousMove.length() * perimeterExtrudeFactor * (setPointsEnd.get(i+1).getExtrusionPct() / 100);
                         }
-                        newMove.put('E', nextExtrusion);
+                        newMove.put('E', nextExtrusionPoint);
                         newMoves.add(newMove);
                         previousMove = v;
                     }
@@ -169,7 +168,7 @@ class GCodeFile {
                  /* -0.1mm 10%
                 -0.5mm
 
-                GCodeCommand[] moves = perimeter.gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).isPosition()).toArray(GCodeCommand[]::new);
+                GCodeCommand[] moves = perimeter.gCodesMoves.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).isPosition()).toArray(GCodeCommand[]::new);
 
                 int LAST = moves.length-1;
 
@@ -185,7 +184,7 @@ class GCodeFile {
                 GCodeCommand cmd = new GCodeCommand("G1", "; inserted by tuner");
                 cmd.put('X', moves[0].get('X') - v2.x);
                 cmd.put('Y', moves[0].get('Y') - v2.y);
-                perimeter.gCodes.add(1, cmd);
+                perimeter.gCodesMoves.add(1, cmd);
 
                 Vector2d v1 = new  Vector2d(moves[1].get('X') - moves[0].get('X'), moves[1].get('Y') - moves[0].get('Y'));
                 v1.normalize();
@@ -195,9 +194,9 @@ class GCodeFile {
                 cmd2.put('X', moves[LAST].get('X') + v1.x);
                 cmd2.put('Y', moves[LAST].get('Y') + v1.y);
                 cmd2.put('E', moves[LAST].get('E') + (v1.length() * extrusionRate) / 100.0);
-                perimeter.gCodes.add(cmd2);
+                perimeter.gCodesMoves.add(cmd2);
 
-                perimeter.gCodes.add(new GCodeComment("; end gcode tuner modified perimeter"));
+                perimeter.gCodesMoves.add(new GCodeComment("; end gcode tuner modified perimeter"));
 
                 //moves[0].put('X', moves[0].get('X') - v1.x);
                 //moves[0].put('Y', moves[0].get('Y') - v1.y);
@@ -218,10 +217,8 @@ class GCodeFile {
      * load unprocessed gcodes
      */
     void load() {
-        try (FileInputStream fstream = new FileInputStream(file);
-             DataInputStream dis = new DataInputStream(fstream);
-             BufferedReader fileStream = new BufferedReader(new InputStreamReader(dis))
-        ) {
+        // wtf
+        try (BufferedReader fileStream = new BufferedReader(new InputStreamReader(new DataInputStream(new FileInputStream(file))))) {
             String strLine;
             int nbLines = 0;
             while ((strLine = fileStream.readLine()) != null) {
@@ -237,6 +234,14 @@ class GCodeFile {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * group continuous extrusions
+     * (an "extrusion" is a perimeter, infill, support) along with its travel moves
+      */
+    void groupExtrusions() {
+
     }
 
     void groupPerimeters() {
@@ -305,8 +310,8 @@ class GCodeFile {
 
                         // top part
                         GCodePerimeter perimeterGroup = new GCodePerimeter();
-                        perimeterGroup.gCodes.addAll(gCodesTmp.subList(firstPerimeterPtIx, curIx + 1));
-                        perimeterGroup.originalLineNumber = perimeterGroup.gCodes.get(0).originalLineNumber;
+                        perimeterGroup.gCodesMoves.addAll(gCodesTmp.subList(firstPerimeterPtIx, curIx + 1));
+                        perimeterGroup.originalLineNumber = perimeterGroup.gCodesMoves.get(0).originalLineNumber;
 
                         // possible perimeter comment from file
                         int j = 0;
