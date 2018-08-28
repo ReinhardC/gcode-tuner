@@ -3,6 +3,7 @@ package com.specularity.printing;
 import com.google.gson.Gson;
 import com.google.gson.internal.LinkedTreeMap;
 import com.specularity.printing.GCodes.GCodePerimeter;
+import com.specularity.printing.ui.EditCell;
 import javafx.application.Application;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.ReadOnlyObjectWrapper;
@@ -75,7 +76,7 @@ public class tuner extends Application {
                 logArea.appendText(gCodeFile.gCodes.size() + " after grouping\n");
                 logArea.appendText(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)\n");
                 logArea.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other\n");
-                logArea.appendText(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesMoves.size()).sum() + " inside groups\n");
+                logArea.appendText(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesLoop.size()).sum() + " inside groups\n");
             }
         });
 
@@ -108,6 +109,8 @@ public class tuner extends Application {
         gCodeFile = new GCodeFile("D:\\Desktop\\g\\dbg.gcode");
         gCodeFile.load();
         gCodeFile.groupPerimeters();
+
+        int ok = 01;
     }
 
     private Tab createTab(String label) {

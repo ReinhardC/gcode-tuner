@@ -1,26 +1,33 @@
 package com.specularity.printing.GCodes;
 
+import com.specularity.printing.MachineState;
+
 import javax.vecmath.Vector2d;
+import javax.vecmath.Vector3d;
 import java.io.PrintWriter;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 
 public class GCodeCommand extends GCode {
-
     private static DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.ENGLISH);
     private static DecimalFormat d0 = new DecimalFormat("#0", symbols );
     private static DecimalFormat d3 = new DecimalFormat("#0.000", symbols );
     private static DecimalFormat d5 = new DecimalFormat("#0.0000", symbols );
 
-    private Map<Character, Double> params = new HashMap<>();
+    protected Map<Character, Double> params = new HashMap<>();
     public String command;
 
     public GCodeCommand(String command, String comment) {
         this.command = command;
         this.comment = comment;
+    }
+
+    public GCodeCommand(GCodeCommand gCodeCommand) {
+        this.set(gCodeCommand);
     }
 
     public double get(char c) {
@@ -38,6 +45,8 @@ public class GCodeCommand extends GCode {
     public void putVector2d(Vector2d v) {
         params.put('X', v.x);
         params.put('Y', v.y);
+        state.updateX(v.x);
+        state.updateY(v.y);
     }
 
     @Override
@@ -69,6 +78,14 @@ public class GCodeCommand extends GCode {
 
     public boolean isPosition() {
         return command.equals("G1") && has('X') && has('Y');
+    }
+
+    public void set(GCodeCommand in) {
+        params.clear();
+        in.params.forEach((c, d) -> params.put(c, d));
+        command = in.command;
+        comment = in.comment;
+        state = new MachineState(in.state);
     }
 }
 

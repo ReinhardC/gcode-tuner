@@ -1,4 +1,4 @@
-package com.specularity.printing;
+package com.specularity.printing.ui;
 
 import javafx.scene.control.Slider;
 import javafx.scene.control.TextField;

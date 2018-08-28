@@ -1,23 +1,25 @@
 package com.specularity.printing.GCodes;
 
-import javax.vecmath.Vector2d;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
 public class GCodePerimeter extends GCode {
-    public List<GCode> gCodesMoves = new ArrayList<>();
+    public List<GCode> gCodesTravel = new ArrayList<>();
+    public List<GCode> gCodesLoop = new ArrayList<>();
+
     private double bbxMinX, bbxMaxX, bbxMinY, bbxMaxY;
 
     @Override
     public String toString() {
-        return "nb gCodesMoves=" + gCodesMoves.size() + (comment != null ? comment : "");
+        return "nb gCodesLoop=" + gCodesLoop.size() + (comment != null ? comment : "");
     }
 
     @Override
     public void serialize(PrintWriter file) throws IOException {
-        for (GCode gCode : gCodesMoves) gCode.serialize(file);
+        for (GCode gCode : gCodesTravel) gCode.serialize(file);
+        for (GCode gCode : gCodesLoop) gCode.serialize(file);
     }
 
     public void updateBbx() {
@@ -26,7 +28,7 @@ public class GCodePerimeter extends GCode {
         bbxMinY = 10000;
         bbxMaxY = -10000;
 
-        for (GCode gCode : gCodesMoves){
+        for (GCode gCode : gCodesLoop){
             if(gCode instanceof GCodeCommand) {
                 GCodeCommand cmd = (GCodeCommand) gCode;
 

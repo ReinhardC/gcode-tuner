@@ -1,5 +1,6 @@
-package com.specularity.printing;
+package com.specularity.printing.ui;
 
+import com.specularity.printing.SetPoint;
 import javafx.event.Event;
 import javafx.geometry.Insets;
 import javafx.scene.control.ContentDisplay;
