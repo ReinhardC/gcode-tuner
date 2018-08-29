@@ -1,4 +1,5 @@
 # gcode-tuner
-Tune gcode files to shift loop start/end points
 
-..mb extend to other things later
+![alt text](img/screenshot.png)
+
+Modify perimeter starts and ends to fix small gaps/blobs in prints
