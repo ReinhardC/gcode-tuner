@@ -1,6 +1,6 @@
 # gcode-tuner
 
-GCode Tuner is a .gcode post-processor. It allows you to modify perimeter starts and ends to fix small gaps/blobs in prints by tweaking the toolpath.
+GCode Tuner is a .gcode post-processor. It allows tweaking perimeter start and end segments to help fix small gaps/blobs in prints.
 
 At the moment, only Simplify3D generated gcode is supported, support for other slicers migth follow. 
 
