@@ -4,14 +4,19 @@ import javax.vecmath.Vector2d;
 import javax.vecmath.Vector3d;
 
 public class MachineState {
-    private boolean isValidXY, isValidZ;
+    private boolean isValidXY;
+    private boolean isValidZ;
+    private boolean isValidFeedrate;
     private Vector3d toolheadPosition;
+    private double feedrate;
     private int originalLineNumber;
 
     public MachineState(MachineState state) {
         isValidXY = state.isValidXY;
         isValidZ = state.isValidZ;
+        isValidFeedrate = state.isValidFeedrate;
         toolheadPosition = new Vector3d(state.toolheadPosition);
+        feedrate = state.feedrate;
         originalLineNumber = state.originalLineNumber;
     }
 
@@ -24,6 +29,18 @@ public class MachineState {
 
     public Vector2d getXY() {
         return new Vector2d(toolheadPosition.x, toolheadPosition.y);
+    }
+
+    public double getX() {
+        return toolheadPosition.x;
+    }
+
+    public double getY() {
+        return toolheadPosition.y;
+    }
+
+    public double getZ() {
+        return toolheadPosition.z;
     }
 
     public void updateX(double x) {
@@ -41,12 +58,25 @@ public class MachineState {
         toolheadPosition.z = z;
     }
 
+    public void updateFeedrate(double f) {
+        isValidFeedrate = true;
+        feedrate = f;
+    }
+
     public boolean isValidXY() {
         return isValidXY;
     }
 
     public boolean isValidZ() {
         return isValidZ;
+    }
+
+    public boolean isValidFeedrate() {
+        return isValidFeedrate;
+    }
+
+    public void setValidFeedrate(boolean validFeedrate) {
+        isValidFeedrate = validFeedrate;
     }
 
     public Vector3d getToolheadPosition() {
@@ -59,5 +89,13 @@ public class MachineState {
 
     public void setOriginalLineNumber(int originalLineNumber) {
         this.originalLineNumber = originalLineNumber;
+    }
+
+    public double getFeedrate() {
+        return feedrate;
+    }
+
+    public void setFeedrate(double feedrate) {
+        this.feedrate = feedrate;
     }
 }

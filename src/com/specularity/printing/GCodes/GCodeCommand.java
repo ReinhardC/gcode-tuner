@@ -49,6 +49,10 @@ public class GCodeCommand extends GCode {
         state.updateY(v.y);
     }
 
+    public Vector2d getVector2d() {
+        return new Vector2d(params.get('X'), params.get('Y'));
+    }
+
     @Override
     public String toString() {
         String toString = command + " " +

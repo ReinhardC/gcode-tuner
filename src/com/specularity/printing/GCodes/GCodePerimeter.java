@@ -11,6 +11,8 @@ public class GCodePerimeter extends GCode {
 
     private double bbxMinX, bbxMaxX, bbxMinY, bbxMaxY;
 
+    public int shellIx = 1; // 1 = outer, 2 = 2nd outer, .. inner
+
     @Override
     public String toString() {
         return "nb gCodesLoop=" + gCodesLoop.size() + (comment != null ? comment : "");

@@ -1,61 +1,69 @@
 package com.specularity.printing;
 
-import com.google.gson.Gson;
 import com.google.gson.internal.LinkedTreeMap;
+import com.specularity.printing.GCodes.GCode;
+import com.specularity.printing.GCodes.GCodeCommand;
 import com.specularity.printing.GCodes.GCodePerimeter;
-import com.specularity.printing.ui.EditCell;
+import com.specularity.printing.ui.EditTab;
+import com.specularity.printing.ui.SettingsTab;
 import javafx.application.Application;
-import javafx.beans.binding.Bindings;
-import javafx.beans.property.ReadOnlyObjectWrapper;
-import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
-import javafx.util.Callback;
-import javafx.util.converter.DoubleStringConverter;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.prefs.Preferences;
+
+import static com.specularity.printing.VectorTools.getTriAngle;
+import static com.specularity.printing.VectorTools.tunePerimeter;
+import static com.specularity.printing.ui.EditTab.emptyTableJson;
+import static com.specularity.printing.ui.EditTab.gson;
 
 
 public class tuner extends Application {
+    private static String applicationTitle = "GCode Tuner V1.0a";
 
-    private TextArea logArea;
+    private TextArea logArea = new TextArea();
     private Button btnTune = new Button("Tune GCode");
     private Button btnBrowseGCode = new Button();
 
     private GCodeFile gCodeFile = null;
 
-    private static Preferences preferences = Preferences.userNodeForPackage(tuner.class);
+    public static Preferences preferences = Preferences.userNodeForPackage(tuner.class);
+    public static Font labelFont = Font.font("Regular", FontWeight.BOLD, 11.);
 
-    public static final ObservableList<SetPoint> setPointsStart = FXCollections.observableArrayList();
-    public static final ObservableList<SetPoint> setPointsEnd = FXCollections.observableArrayList();
+    /**
+     * todo: find better solution!
+     */
+    public final ObservableList<SetPoint> setPointsStartOuter = FXCollections.observableArrayList();
+    public final ObservableList<SetPoint> setPointsEndOuter = FXCollections.observableArrayList();
 
-    private static Gson gson = new Gson();
-    private static final String emptyTableJson = "[{\"offset\":0.0,\"extrusionPct\":100.0,\"angle\":0.0}]";
+    public final ObservableList<SetPoint> setPointsStart2ndOuter = FXCollections.observableArrayList();
+    public final ObservableList<SetPoint> setPointsEnd2ndOuter = FXCollections.observableArrayList();
 
     @Override
     public void start(Stage primaryStage)
     {
         restoreStateFromPreferences();
 
-        Tab tabOuterPerimeter = createTab("Outer Perimeter");
-        Tab tab2ndPerimeter = createTab("2nd Perimeter");
-        Tab tab3rdPerimeter = createTab("3rd Perimeter");
+        Tab tabOuterPerimeter = new EditTab("Outer Perimeter", "Outer", setPointsStartOuter, setPointsEndOuter);
+        Tab tab2ndPerimeter = new EditTab("2nd Outer Perimeter", "2ndOuter", setPointsStart2ndOuter, setPointsEnd2ndOuter);
+        Tab tabOther = new SettingsTab();
 
         TabPane tabPane = new TabPane();
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-        tabPane.getTabs().addAll(tabOuterPerimeter, tab2ndPerimeter, tab3rdPerimeter);
+
+        tabPane.getTabs().addAll(tabOuterPerimeter, tab2ndPerimeter, tabOther);
 
         btnBrowseGCode.setText("Open GCode");
         btnBrowseGCode.setOnAction(event -> {
@@ -72,7 +80,6 @@ public class tuner extends Application {
                 gCodeFile.load();
                 logArea.appendText(file.getAbsolutePath() + " stats:\n");
                 logArea.appendText(gCodeFile.gCodes.size() + " lines read\n");
-                gCodeFile.groupPerimeters();
                 logArea.appendText(gCodeFile.gCodes.size() + " after grouping\n");
                 logArea.appendText(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)\n");
                 logArea.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other\n");
@@ -81,13 +88,12 @@ public class tuner extends Application {
         });
 
         btnTune.setOnAction(event -> {
-            if(gCodeFile != null) {
-                gCodeFile.modifyPerimeters();
-                // logArea.appendText("tuning complete, perimeter starting points extended by 3mm. writing now.\n");
-                String fileName = gCodeFile.writeCopy();
-                // logArea.appendText("tuned file written to " + fileName +".\n");
-            } else logArea.appendText("no file\n");
-
+            // GCodeFile gCodeFile2 = new GCodeFile("D:\\Desktop\\g\\dbg.gcode");
+            gCodeFile.load();
+            tune(gCodeFile);
+            logArea.appendText("tuning complete. writing now.\n");
+            String fileName = gCodeFile.writeCopy();
+            logArea.appendText("tuned file written to " + fileName +".\n");
         });
 
         // A layout container for UI controls
@@ -95,210 +101,114 @@ public class tuner extends Application {
         root.setCenter(tabPane);
         root.setTop(new HBox(btnBrowseGCode, btnTune));
 
+        BorderPane logPane = new BorderPane();
+        logPane.setCenter(logArea);
+        logArea.setEditable(false);
+        logArea.setFont(new Font("Courier New", 11));
+        logPane.setMaxHeight(120.0);
+
+        Label logPaneLabel = new Label("Log output");
+        logPaneLabel.setPadding(new Insets(6,4,4, 4));
+        logPaneLabel.setFont(labelFont);
+        logPane.setTop(logPaneLabel);
+
+        root.setBottom(logPane);
+
+        logArea.appendText("GCode Tuner started.\n");
+
         HBox.setMargin(btnBrowseGCode, new Insets(12,12,12,12));
         HBox.setMargin(btnTune, new Insets(12,18,12,0));
 
         // Top level container for all view content
-        Scene scene = new Scene(root, 564, 550);
+        Scene scene = new Scene(root, 600, 800);
 
         // primaryStage is the main top level window created by platform
-        primaryStage.setTitle("GCode Tuner");
+        primaryStage.setTitle(applicationTitle);
         primaryStage.setScene(scene);
         primaryStage.show();
-
-        gCodeFile = new GCodeFile("D:\\Desktop\\g\\dbg.gcode");
-        gCodeFile.load();
-        gCodeFile.groupPerimeters();
 
         int ok = 01;
     }
 
-    private Tab createTab(String label) {
-        TableView<SetPoint> tvStart = makeTable(setPointsStart, "setPointsStart");
-        tvStart.setPadding(new Insets(4));
-        BorderPane leftPane = new BorderPane();
-        Label leftPaneLabel = new Label("Path Start Tweaks");
-        leftPaneLabel.setFont(new Font("Helvetica", 11));
-        leftPaneLabel.setPadding(new Insets(12,4,4, 4));
-        leftPane.setTop(leftPaneLabel);
-        leftPane.setCenter(tvStart);
-
-        TableView<SetPoint> tvEnd = makeTable(setPointsEnd, "setPointsEnd");
-        tvEnd.setPadding(new Insets(4));
-        BorderPane rightPane = new BorderPane();
-        Label rightPaneLabel = new Label("Path End Tweaks");
-        rightPaneLabel.setPadding(new Insets(12,4,4, 4));
-        rightPaneLabel.setFont(new Font("Helvetica", 11));
-        rightPane.setTop(rightPaneLabel);
-        rightPane.setCenter(tvEnd);
-
-        HBox tabBox = new HBox();
-        tabBox.getChildren().addAll(leftPane, rightPane);
-        tabBox.setSpacing(5);
-        HBox.setHgrow(leftPane, Priority.ALWAYS);
-        HBox.setHgrow(rightPane, Priority.ALWAYS);
-
-        Tab tab = new Tab(label);
-        tab.setContent(tabBox);
-
-        return tab;
-    }
-
     private void restoreStateFromPreferences() {
-        String strSetPointsStart = preferences.get("setPointsStart", emptyTableJson);
-        for(Object o: gson.fromJson(strSetPointsStart, ArrayList.class)) {
+        String strSetPointsStart1 = preferences.get("setPointsStartOuter", emptyTableJson);
+        for(Object o: gson.fromJson(strSetPointsStart1, ArrayList.class)) {
             LinkedTreeMap ltm = (LinkedTreeMap) o;
-            setPointsStart.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("angle")));
+            setPointsStartOuter.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
         }
 
-        String strSetPointsEnd = preferences.get("setPointsEnd", emptyTableJson);
-        for(Object o: gson.fromJson(strSetPointsEnd, ArrayList.class)) {
+        String strSetPointsStart2 = preferences.get("setPointsStart2ndOuter", emptyTableJson);
+        for(Object o: gson.fromJson(strSetPointsStart2, ArrayList.class)) {
             LinkedTreeMap ltm = (LinkedTreeMap) o;
-            setPointsEnd.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("angle")));
+            setPointsStart2ndOuter.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
+        }
+
+        String strSetPointsEnd1 = preferences.get("setPointsEndOuter", emptyTableJson);
+        for(Object o: gson.fromJson(strSetPointsEnd1, ArrayList.class)) {
+            LinkedTreeMap ltm = (LinkedTreeMap) o;
+            setPointsEndOuter.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
+        }
+
+        String strSetPointsEnd2 = preferences.get("setPointsEnd2ndOuter", emptyTableJson);
+        for(Object o: gson.fromJson(strSetPointsEnd2, ArrayList.class)) {
+            LinkedTreeMap ltm = (LinkedTreeMap) o;
+            setPointsEnd2ndOuter.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
         }
     }
 
-    private TableView<SetPoint> makeTable(ObservableList<SetPoint> setPoints, String preferenceName) {
-        TableView<SetPoint> tv = new TableView<>();
+    void tune(GCodeFile file) {
+        for (GCode gCode : file.gCodes) {
+            if (gCode instanceof GCodePerimeter) {
+                GCodePerimeter perimeter = (GCodePerimeter) gCode;
 
-        tv.setId(preferenceName);
+                if(perimeter.shellIx == 1) {
+                    double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                    if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
+                        continue;
 
-        TableColumn numberCol = new TableColumn("#");
-        numberCol.setCellValueFactory((Callback<TableColumn.CellDataFeatures<SetPoint, String>, ObservableValue<String>>) p -> new ReadOnlyObjectWrapper<>((tv.getItems().indexOf(p.getValue()) + 1) + ""));
-        numberCol.setSortable(false);
+                    List<GCode> newGCodes = tunePerimeter(perimeter.gCodesLoop, setPointsStartOuter, setPointsEndOuter);
 
-        TableColumn<SetPoint, Double> tc1 = new TableColumn<>("Offset (mm)");
-        tc1.setId("offset");
-        tc1.setMinWidth(80.0);
-        tc1.setCellValueFactory(new PropertyValueFactory<>("offset"));
-        tc1.setCellFactory(tableColumn -> new EditCell<>(new DoubleStringConverter()));
-        tc1.setOnEditCommit( (TableColumn.CellEditEvent<SetPoint, Double> t) -> {
-            t.getTableView().getItems().get(
-                    t.getTablePosition().getRow()).setOffset(t.getNewValue());
-            t.getTableView().refresh();
-            preferences.put(preferenceName, gson.toJson(setPoints));
-        });
-        tc1.setEditable(true);
-        tc1.setSortable(false);
+                    GCodeCommand xyTravelMove = Heuristics.getXYTravelMove(perimeter.gCodesTravel);
+                    GCodeCommand zTravelMove = Heuristics.getZTravelMove(perimeter.gCodesTravel);
 
-        TableColumn<SetPoint, Double> tc2 = new TableColumn<>("Extrusion (%)");
-        tc2.setId("extrusion");
-        tc2.setMinWidth(80.0);
-        tc2.setCellValueFactory(new PropertyValueFactory<>("extrusionPct"));
-        tc2.setCellFactory(tableColumn -> new EditCell<>(new DoubleStringConverter()));
-        tc2.setOnEditCommit( (TableColumn.CellEditEvent<SetPoint, Double> t) -> {
-            t.getTableView().getItems().get(
-                    t.getTablePosition().getRow()).setExtrusionPct(t.getNewValue());
-            t.getTableView().refresh();
-            preferences.put(preferenceName, gson.toJson(setPoints));
-        });
-        tc2.setEditable(true);
-        tc2.setSortable(false);
+                    xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
 
-        TableColumn<SetPoint, Double> tc3 = new TableColumn<>("Angle (°)");
-        tc3.setId("angle");
-        tc3.setMinWidth(60.0);
-        tc3.setCellValueFactory(new PropertyValueFactory<>("angle"));
-        tc3.setCellFactory(tableColumn -> new EditCell<>(new DoubleStringConverter()));
-        tc3.setOnEditCommit( (TableColumn.CellEditEvent<SetPoint, Double> t) -> {
-            t.getTableView().getItems().get(
-                    t.getTablePosition().getRow()).setAngle(t.getNewValue());
-            t.getTableView().refresh();
-            preferences.put(preferenceName, gson.toJson(setPoints));
-        });
-        tc3.setEditable(true);
-        tc3.setSortable(false);
+                    if (preferences.get("preventLayerChangeOnOuterPerimeter", "on").equals("on") && (zTravelMove != null) && (zTravelMove.getState().getOriginalLineNumber() > xyTravelMove.getState().getOriginalLineNumber())) {
+                        GCodeCommand tmp = new GCodeCommand(xyTravelMove);
+                        xyTravelMove.set(zTravelMove);
+                        zTravelMove.set(tmp);
+                    }
 
-        tv.setEditable(true);
-        tv.getColumns().addAll(numberCol, tc1, tc2, tc3);
-        tv.setItems(setPoints);
+                    newGCodes.remove(0);
 
-        tv.setRowFactory(tableView -> {
-            final TableRow<SetPoint> row = new TableRow<>();
-            final ContextMenu rowMenuNull = new ContextMenu();
-            final ContextMenu rowMenuNotNull = new ContextMenu();
+                    if (!((GCodeCommand) newGCodes.get(0)).has('F'))
+                        ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
 
-            MenuItem deleteEntry = new MenuItem("Delete Entry");
-            deleteEntry.setOnAction(event -> {
-                if(tv.getItems().size() > 1) {
-                    tv.getItems().remove(row.getItem());
-                    tableView.refresh();
-                    preferences.put(preferenceName, gson.toJson(setPoints));
+                    perimeter.gCodesLoop = newGCodes;
+
+                    //               for (GCode newGCode : newGCodes)
+                    //                   System.out.println(newGCode);
+                    //               break;
                 }
-            });
+                else if(perimeter.shellIx == 2)
+                {
+                    double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                    if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
+                        continue;
 
-            MenuItem newEntry = new MenuItem("New Entry");
-            newEntry.setOnAction(event -> {
-                SetPoint item = row.getItem();
-                tv.getItems().add(row.getIndex()+1, new SetPoint(item.getOffset(), item.getExtrusionPct(), item.getAngle()));
-                tableView.refresh();
-                preferences.put(preferenceName, gson.toJson(setPoints));
-            });
+                    List<GCode> newGCodes = tunePerimeter(perimeter.gCodesLoop, setPointsStart2ndOuter, setPointsEnd2ndOuter);
 
-            MenuItem resetTable = new MenuItem("Reset to default");
-            resetTable.setOnAction(event -> {
-                tv.getItems().clear();
-                String strSetPointsStart = emptyTableJson;
-                for(Object o: gson.fromJson(strSetPointsStart, ArrayList.class)) {
-                    LinkedTreeMap ltm = (LinkedTreeMap) o;
-                    tv.getItems().add(new SetPoint((Double) ltm.get("offset"), (Double) ltm.get("extrusionPct"), (Double) ltm.get("angle")));
+                    GCodeCommand xyTravelMove = Heuristics.getXYTravelMove(perimeter.gCodesTravel);
+                    xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
+
+                    newGCodes.remove(0);
+
+                    if (!((GCodeCommand) newGCodes.get(0)).has('F'))
+                        ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
+
+                    perimeter.gCodesLoop = newGCodes;
                 }
-                tableView.refresh();
-                preferences.put(preferenceName, gson.toJson(setPoints));
-            });
-
-            rowMenuNotNull.getItems().addAll(deleteEntry, newEntry, resetTable);
-
-            MenuItem newEntry2 = new MenuItem("New Entry");
-            newEntry2.setOnAction(event -> {
-                SetPoint item = tv.getItems().get(tv.getItems().size() - 1);
-                tv.getItems().add(new SetPoint(item.getOffset(), item.getExtrusionPct(), item.getAngle()));
-                tableView.refresh();
-                preferences.put(preferenceName, gson.toJson(setPoints));
-            });
-
-            MenuItem resetTable2 = new MenuItem("Reset to default");
-            resetTable2.setOnAction(event -> {
-                tv.getItems().clear();
-                String strSetPointsStart = emptyTableJson;
-                for(Object o: gson.fromJson(strSetPointsStart, ArrayList.class)) {
-                    LinkedTreeMap ltm = (LinkedTreeMap) o;
-                    tv.getItems().add(new SetPoint((Double) ltm.get("offset"), (Double) ltm.get("extrusionPct"), (Double) ltm.get("angle")));
-                }
-                tableView.refresh();
-                preferences.put(preferenceName, gson.toJson(setPoints));
-            });
-
-            rowMenuNull.getItems().addAll(newEntry2, resetTable2);
-
-//            row.setOnKeyPressed(event -> {
-//                if(event.getCode() == KeyCode.DELETE || event.getCode() == KeyCode.BACK_SPACE) {
-//                    if(tv.getItems().size() > 1) {
-//                        tv.getItems().remove(row.getItem());
-//                        tableView.refresh();
-//                        preferences.put(preferenceName, gson.toJson(setPoints));
-//                    }
-//                }
-//            });
-
-            row.setOnMouseClicked(event -> {
-                if (event.getClickCount() == 2 && row.isEmpty() ) {
-                    SetPoint item = tv.getItems().get(tv.getItems().size() - 1);
-                    tv.getItems().add(new SetPoint(item.getOffset(), item.getExtrusionPct(), item.getAngle()));
-                    tableView.refresh();
-                    preferences.put(preferenceName, gson.toJson(setPoints));
-                }
-            });
-
-            row.contextMenuProperty().bind(
-                    Bindings.when(Bindings.isNotNull(row.itemProperty()))
-                            .then(rowMenuNotNull)
-                            .otherwise(rowMenuNull));
-
-            return row;
-        });
-        tv.setPlaceholder(null);
-
-        return tv;
+            }
+        }
     }
 }

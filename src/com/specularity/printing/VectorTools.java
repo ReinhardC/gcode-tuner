@@ -2,17 +2,17 @@ package com.specularity.printing;
 
 import com.specularity.printing.GCodes.GCode;
 import com.specularity.printing.GCodes.GCodeCommand;
+import javafx.collections.ObservableList;
 
 import javax.vecmath.Vector2d;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.specularity.printing.tuner.setPointsEnd;
-import static com.specularity.printing.tuner.setPointsStart;
+import static com.specularity.printing.tuner.preferences;
 
 public class VectorTools {
 
-    public static List<GCode> calculateTunedPath(List<GCode> gCodesInput)
+    public static List<GCode> tunePerimeter(List<GCode> gCodesInput, ObservableList<SetPoint> setPointsStart, ObservableList<SetPoint> setPointsEnd)
     {
         ArrayList<GCode> gCodesOutput = new ArrayList<>();
 
@@ -28,6 +28,8 @@ public class VectorTools {
         originalMoves.add(0, originalMoves.get(originalMoves.size()-1));
         originalMoves.remove(originalMoves.size()-1); // remove last point which is same as first point
 
+        double minExtrusionD = preferences.getDouble("minExtrusionDistance", 0.0001);
+
         Double totalPathAngle = 0.0;
         Vector2d pathOffset = new Vector2d(0.0, 0.0); // used for rotation
 
@@ -40,7 +42,7 @@ public class VectorTools {
         // reversed so the rotation can be applied to the points
         //
 
-        List<List<Vector2d>> startPaths = new ArrayList<>();
+        List<List<Vector2d>> startPaths = new ArrayList<>(); // used only for reversing
 
         for (int i = setPointsStart.size() - 2; i >= 0; i--)
         {
@@ -51,7 +53,7 @@ public class VectorTools {
             for (Vector2d v: startPath)
                 v.add(pathOffset);
 
-            totalPathAngle += setPointsStart.get(i+1).getAngle();
+            totalPathAngle -= setPointsStart.get(i+1).getAngle(); // negate so positive angle is always inward into model
 
             Vector2d newPathOffset = new Vector2d(startPath.get(0));
             rotatePathAround(startPath, startPath.get(startPath.size() - 1), totalPathAngle);
@@ -60,8 +62,9 @@ public class VectorTools {
 
             startPath.forEach(VectorTools::round3Vector2d);
             removeDoublePoints(startPath);
-            if(i != 0)
+            if(i != 0) {
                 startPath.remove(0);
+            }
 
             startPaths.add(0, startPath);
         }
@@ -73,11 +76,24 @@ public class VectorTools {
                 GCodeCommand newMove = new GCodeCommand("G1", "; GCodeTuner - replaced start points");
                 newMove.setState(new MachineState(firstGCode.getState()));
                 newMove.putVector2d(v);
+
+                if(setPointsStart.get(i).getZoffset() != 0) {
+                    newMove.put('Z', newMove.getState().getToolheadPosition().getZ() + setPointsStart.get(i).getZoffset());
+                }
+
                 if(previousMove != null) {
                     previousMove.sub(v);
-                    nextExtrusionPoint += previousMove.length() * perimeterExtrudeFactor * (setPointsStart.get(i+1).getExtrusionPct() / 100);
+                    double extrusionD = previousMove.length() * perimeterExtrudeFactor * (setPointsStart.get(i + 1).getExtrusionPct() / 100.);
+                    if(extrusionD < minExtrusionD) {
+                        previousMove = v;
+                        continue;
+                    }
+                    nextExtrusionPoint += extrusionD;
                 }
+
                 newMove.put('E', nextExtrusionPoint);
+                newMove.put('F', newMove.getState().getFeedrate() * (setPointsStart.get(i+1).getFeedratePct() / 100.));
+
                 gCodesOutput.add(newMove);
                 previousMove = v;
             }
@@ -121,7 +137,7 @@ public class VectorTools {
             for (Vector2d v: endPath)
                 v.add(pathOffset);
 
-            totalPathAngle -= setPointsEnd.get(i).getAngle(); // negate so positive angle is always inward into model
+            totalPathAngle += setPointsEnd.get(i).getAngle();
 
             Vector2d newPathOffset = new Vector2d(endPath.get(endPath.size()-1));
             rotatePathAround(endPath, endPath.get(0), totalPathAngle);
@@ -139,11 +155,17 @@ public class VectorTools {
                 GCodeCommand newMove = new GCodeCommand("G1", "; GCodeTuner - replaced end points");
                 newMove.setState(new MachineState(firstGCode.getState()));
                 newMove.putVector2d(v);
+
+                if(setPointsEnd.get(i).getZoffset() != 0)
+                    newMove.put('Z', newMove.getState().getToolheadPosition().getZ() + setPointsEnd.get(i).getZoffset());
+
                 if(previousMove != null) {
                     previousMove.sub(v);
                     nextExtrusionPoint += previousMove.length() * perimeterExtrudeFactor * (setPointsEnd.get(i+1).getExtrusionPct() / 100);
                 }
                 newMove.put('E', nextExtrusionPoint);
+                newMove.put('F', newMove.getState().getFeedrate() * (setPointsEnd.get(i+1).getFeedratePct() / 100.));
+
                 gCodesOutput.add(newMove);
                 previousMove = v;
             }
@@ -220,7 +242,7 @@ public class VectorTools {
         v.scale(remaining / v.length() );
 
         // 5. add "to" if not already included
-        if(v.length()>0.00001) {
+        if(v.length()>0.00000001) {
             v2.add(v);
             resampledVectorPath.add(new Vector2d(v2));
         }
@@ -282,13 +304,21 @@ public class VectorTools {
         point.y = rotated_y + around.y;
     }
 
+    public static double getTriAngle(Vector2d origin, Vector2d p1, Vector2d p2) {
+        Vector2d v1 = new Vector2d(p1);
+        Vector2d v2 = new Vector2d(p2);
+        v1.sub(origin);
+        v2.sub(origin);
+        return Math.toDegrees(v1.angle(v2));
+    }
+
     public static void round3Vector2d(Vector2d v) {
         v.x = round3(v.x);
         v.y = round3(v.y);
     }
 
     public static double round3(double value) {
-        return Math.round(10000. * value) / 10000.;
+        return Math.round(1000. * value) / 1000.;
     }
 
     /**

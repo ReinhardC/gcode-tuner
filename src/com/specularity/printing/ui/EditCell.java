@@ -38,9 +38,17 @@ public class EditCell<S, T> extends TableCell<S, T> {
         if(pt == null)
             return;
 
-        if(( getTableView().getId().equals("setPointsStart") && getTableRow().getIndex() == 0 && !getTableColumn().getId().equals("offset")) ||
-                ( getTableView().getId().equals("setPointsEnd") &&   getTableRow().getIndex() == getTableView().getItems().size()-1 && getTableColumn().getId().equals("angle")) ||
-                ( getTableView().getId().equals("setPointsEnd") &&   getTableRow().getIndex() == 0 && getTableColumn().getId().equals("extrusion"))) {
+        if(( getTableView().getId().equals("setPointsStartOuter") && getTableRow().getIndex() == 0 && !(getTableColumn().getId().equals("offset") || getTableColumn().getId().equals("zoffset"))) ||
+                ( getTableView().getId().equals("setPointsEndOuter") && getTableRow().getIndex() == getTableView().getItems().size()-1 && getTableColumn().getId().equals("angle")) ||
+                ( getTableView().getId().equals("setPointsEndOuter") && getTableRow().getIndex() == 0 && !(getTableColumn().getId().equals("offset") || getTableColumn().getId().equals("angle") || getTableColumn().getId().equals("zoffset"))))
+        {
+            setDisable(true);
+            setText("n/a");
+        }
+        else if (( getTableView().getId().equals("setPointsStart2ndOuter") && getTableRow().getIndex() == 0 && !(getTableColumn().getId().equals("offset") || getTableColumn().getId().equals("zoffset"))) ||
+                ( getTableView().getId().equals("setPointsEnd2ndOuter") && getTableRow().getIndex() == getTableView().getItems().size()-1 && getTableColumn().getId().equals("angle")) ||
+                ( getTableView().getId().equals("setPointsEnd2ndOuter") && getTableRow().getIndex() == 0 && !(getTableColumn().getId().equals("offset") || getTableColumn().getId().equals("angle") || getTableColumn().getId().equals("zoffset"))))
+        {
             setDisable(true);
             setText("n/a");
         }

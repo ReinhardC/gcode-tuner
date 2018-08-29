@@ -37,4 +37,24 @@ public class Heuristics {
     public static double getZHeight(List<GCode> gCodes) {
         return gCodes.get(0).getState().getToolheadPosition().z;
     }
+
+    public static GCodeCommand getXYTravelMove(List<GCode> gCodesTravel) {
+
+        Object[] xyOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('X') && !((GCodeCommand) gCode1).has('Z')).toArray();
+
+        if(xyOnlyTravelMoves.length > 1)
+            System.out.println("Heuristics assertion failed, multiple XY travel moves");
+
+        return xyOnlyTravelMoves.length == 0 ? null : ((GCodeCommand)xyOnlyTravelMoves[0]);
+    }
+
+    public static GCodeCommand getZTravelMove(List<GCode> gCodesTravel) {
+
+        Object[] zOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X')).toArray();
+
+        if(zOnlyTravelMoves.length > 1)
+            System.out.println("Heuristics assertion failed, multiple Z travel moves");
+
+        return zOnlyTravelMoves.length == 0 ? null : ((GCodeCommand)zOnlyTravelMoves[0]);
+    }
 }

@@ -25,6 +25,9 @@ public class GCodeFactory {
 
             String[] tokens = lineSeparator.split(command);
 
+            if(tokens.length == 0)
+                return new GCodeComment(";---");
+
             Pair<Character, Double> cmdPair = getParamValuePair(tokens[0]);
             if(cmdPair != null) {
                 GCodeCommand newCommand;
