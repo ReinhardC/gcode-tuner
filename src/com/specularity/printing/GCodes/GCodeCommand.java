@@ -81,7 +81,7 @@ public class GCodeCommand extends GCode {
     public void serialize(PrintWriter file) { file.write(toString() + "\r\n"); }
 
     public boolean isPosition() {
-        return command.equals("G1") && has('X') && has('Y');
+        return (command.equals("G1") || command.equals("G0")) && has('X') && has('Y');
     }
 
     public void set(GCodeCommand in) {

@@ -11,10 +11,6 @@ import java.io.*;
 import java.util.*;
 import java.util.stream.Stream;
 
-import static com.specularity.printing.VectorTools.getTriAngle;
-import static com.specularity.printing.VectorTools.tunePerimeter;
-import static com.specularity.printing.tuner.*;
-
 class GCodeFile {
     private final File file;
 
@@ -37,7 +33,7 @@ class GCodeFile {
                 if (gcode != null) {
                     if (gcode instanceof GCodeCommand) {
                         GCodeCommand cmd = (GCodeCommand) gcode;
-                        if (cmd.command.equals("G1")) {
+                        if (cmd.command.equals("G1") || cmd.command.equals("G0")) {
                             if (cmd.has('X'))
                                 currentState.updateX(cmd.get('X'));
                             if (cmd.has('Y'))
@@ -129,8 +125,8 @@ class GCodeFile {
                         // assign size ids to perimeters (works for outer perimeters only)
                         if(lastPerimeter != null && lastPerimeter.getState().getZ() == perimeter.getState().getZ()) // same layer?
                         {
-                            Vector2d v = Heuristics.getXYTravelMove(perimeter.gCodesTravel).getVector2d();
-                            v.sub(Heuristics.getXYTravelMove(lastPerimeter.gCodesTravel).getVector2d());
+                            Vector2d v = Heuristics.getLastXYTravelMove(perimeter.gCodesTravel).getVector2d();
+                            v.sub(Heuristics.getLastXYTravelMove(lastPerimeter.gCodesTravel).getVector2d());
                             double perimeterDistance = v.length();
 
                             if(currentPerimeterGroup.size() == 0 || perimeterDistance < 1.0/*mm*/) // very short distance? belonging to same perimeter group
@@ -200,7 +196,7 @@ class GCodeFile {
         v2.sub(new Vector3d(peri0.get(1).getState().getX(), peri0.get(1).getState().getY(), 0));
         v1.cross(v1, v2);
 
-        return v1.y > 0;
+        return v1.z > 0;
     }
 
     Stream<GCode> getPerimeters() {

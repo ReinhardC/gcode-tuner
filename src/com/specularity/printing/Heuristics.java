@@ -38,23 +38,33 @@ public class Heuristics {
         return gCodes.get(0).getState().getToolheadPosition().z;
     }
 
-    public static GCodeCommand getXYTravelMove(List<GCode> gCodesTravel) {
+    public static GCodeCommand getLastXYTravelMove(List<GCode> gCodesTravel) {
 
         Object[] xyOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('X') && !((GCodeCommand) gCode1).has('Z')).toArray();
 
-        if(xyOnlyTravelMoves.length > 1)
-            System.out.println("Heuristics assertion failed, multiple XY travel moves");
+        if(xyOnlyTravelMoves.length == 0)
+            System.out.println("Heuristics assertion failed, no travel move found");
 
-        return xyOnlyTravelMoves.length == 0 ? null : ((GCodeCommand)xyOnlyTravelMoves[0]);
+        return xyOnlyTravelMoves.length == 0 ? null : ((GCodeCommand)xyOnlyTravelMoves[xyOnlyTravelMoves.length-1]);
     }
 
-    public static GCodeCommand getZTravelMove(List<GCode> gCodesTravel) {
+    public static GCodeCommand getLastZTravelMove(List<GCode> gCodesTravel) {
 
         Object[] zOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X')).toArray();
 
-        if(zOnlyTravelMoves.length > 1)
-            System.out.println("Heuristics assertion failed, multiple Z travel moves");
+        if(zOnlyTravelMoves.length == 0)
+            System.out.println("Heuristics assertion failed, no Z travel move found");
 
-        return zOnlyTravelMoves.length == 0 ? null : ((GCodeCommand)zOnlyTravelMoves[0]);
+        return zOnlyTravelMoves.length == 0 ? null : ((GCodeCommand)zOnlyTravelMoves[zOnlyTravelMoves.length-1]);
+    }
+
+    public static double getLayerHeight(List<GCode> gCodesTravel) {
+        Object[] zOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X')).toArray();
+
+        if(zOnlyTravelMoves.length == 0)
+            System.out.println("Heuristics assertion failed, no Z travel move found");
+
+        // use last Z
+        return zOnlyTravelMoves.length == 0 ? 0.0 : ((GCodeCommand)zOnlyTravelMoves[zOnlyTravelMoves.length-1]).get('Z');
     }
 }

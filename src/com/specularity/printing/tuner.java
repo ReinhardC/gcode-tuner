@@ -71,8 +71,10 @@ public class tuner extends Application {
 
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle("Open GCode File");
-            fileChooser.setInitialDirectory(initDir != null ? new File(initDir) : null);
+            if(!new File(initDir).exists())
+                initDir = null;
 
+            fileChooser.setInitialDirectory(initDir != null ? new File(initDir) : null);
             File file = fileChooser.showOpenDialog(primaryStage);
             if(file != null) {
                 preferences.put("lastDirectoryBrowsed", file.getParent());
@@ -166,10 +168,10 @@ public class tuner extends Application {
                     if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
                         continue;
 
-                    List<GCode> newGCodes = tunePerimeter(perimeter.gCodesLoop, setPointsStartOuter, setPointsEndOuter);
+                    GCodeCommand xyTravelMove = Heuristics.getLastXYTravelMove(perimeter.gCodesTravel);
+                    GCodeCommand zTravelMove = Heuristics.getLastZTravelMove(perimeter.gCodesTravel);
 
-                    GCodeCommand xyTravelMove = Heuristics.getXYTravelMove(perimeter.gCodesTravel);
-                    GCodeCommand zTravelMove = Heuristics.getZTravelMove(perimeter.gCodesTravel);
+                    List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStartOuter, setPointsEndOuter);
 
                     xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
 
@@ -196,9 +198,9 @@ public class tuner extends Application {
                     if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
                         continue;
 
-                    List<GCode> newGCodes = tunePerimeter(perimeter.gCodesLoop, setPointsStart2ndOuter, setPointsEnd2ndOuter);
+                    List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStart2ndOuter, setPointsEnd2ndOuter);
 
-                    GCodeCommand xyTravelMove = Heuristics.getXYTravelMove(perimeter.gCodesTravel);
+                    GCodeCommand xyTravelMove = Heuristics.getLastXYTravelMove(perimeter.gCodesTravel);
                     xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
 
                     newGCodes.remove(0);
