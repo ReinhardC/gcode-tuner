@@ -33,7 +33,7 @@ import static com.specularity.printing.ui.EditTab.emptyTableJson;
 import static com.specularity.printing.ui.EditTab.gson;
 
 public class tuner extends Application {
-    private static String applicationTitle = "GCode Tuner V1.0a";
+    private static String applicationTitle = "GCode Tuner V1.0";
 
     public static TextArea logArea;
 
@@ -77,13 +77,13 @@ public class tuner extends Application {
                             return;
                         }
                         restoreFromString(setPointsStartOuter, line[0]);
-                        preferences.put("setPointsStartOuter", gson.toJson(setPointsStartOuter));
+                        preferences.put("setPointsStartOuter", line[0]);
                         restoreFromString(setPointsEndOuter, line[1]);
-                        preferences.put("setPointsEndOuter", gson.toJson(setPointsEndOuter));
+                        preferences.put("setPointsEndOuter", line[1]);
                         restoreFromString(setPointsStart2ndOuter, line[2]);
-                        preferences.put("setPointsStart2ndOuter", gson.toJson(setPointsStart2ndOuter));
+                        preferences.put("setPointsStart2ndOuter", line[2]);
                         restoreFromString(setPointsEnd2ndOuter, line[3]);
-                        preferences.put("setPointsEnd2ndOuter", gson.toJson(setPointsEnd2ndOuter));
+                        preferences.put("setPointsEnd2ndOuter", line[3]);
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
