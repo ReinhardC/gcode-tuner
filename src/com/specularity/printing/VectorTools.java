@@ -79,7 +79,7 @@ public class VectorTools {
 
         for (int i = 0; i < setPointsStart.size()-1; i++) // add startPaths in forward order
         {
-            System.out.println(startPaths.get(i) + " (startPath with " + setPointsStart.get(i+1).getExtrusionPct() + ")");
+            // System.out.println(startPaths.get(i) + " (startPath with " + setPointsStart.get(i+1).getExtrusionPct() + ")");
             for (Vector2d move : startPaths.get(i)) {
                 GCodeCommand newMove = new GCodeCommand("G1", "; GCodeTuner - replaced start points");
                 newMove.setState(new MachineState(firstGCode.getState()));
@@ -111,7 +111,7 @@ public class VectorTools {
         if(setPointsStart.size() != 1)
             mainExtrudedPath.remove(0);
 
-        System.out.println(mainExtrudedPath + " (mainExtrudedPath with 100)");
+        // System.out.println(mainExtrudedPath + " (mainExtrudedPath with 100)");
         for (int i = 0; i < mainExtrudedPath.size(); i++) {
             Vector2d v = mainExtrudedPath.get(i);
             GCodeCommand newMove = new GCodeCommand("G1", null);
@@ -155,8 +155,8 @@ public class VectorTools {
             removeDoublePoints(endPath);
             endPath.remove(0);
 
-            if(endPath.size() > 0)
-                System.out.println(endPath + " (endPath with " + setPointsEnd.get(i+1).getExtrusionPct() + ")");
+            //if(endPath.size() > 0)
+              //  System.out.println(endPath + " (endPath with " + setPointsEnd.get(i+1).getExtrusionPct() + ")");
 
             for (Vector2d move : endPath) {
                 GCodeCommand newMove = new GCodeCommand("G1", "; GCodeTuner - replaced end points");
@@ -182,7 +182,7 @@ public class VectorTools {
             cmd.put('Z', firstGCode.getState().getZ());
             gCodesOutput.add(cmd);
         }
-        
+
         return gCodesOutput;
     }
 

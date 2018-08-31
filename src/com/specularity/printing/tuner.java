@@ -33,27 +33,30 @@ import static com.specularity.printing.ui.EditTab.gson;
 public class tuner extends Application {
     private static String applicationTitle = "GCode Tuner V1.0a";
 
-    private TextArea logArea = new TextArea();
-    private Button btnTune = new Button("Tune GCode");
-    private Button btnBrowseGCode = new Button();
-
-    private GCodeFile gCodeFile = null;
+    public static TextArea logArea;
 
     public static Preferences preferences = Preferences.userNodeForPackage(tuner.class);
     public static Font labelFont = Font.font("Regular", FontWeight.BOLD, 11.);
 
+    private GCodeFile gCodeFile = null;
+
     /**
      * todo: find better solution!
      */
-    public final ObservableList<SetPoint> setPointsStartOuter = FXCollections.observableArrayList();
-    public final ObservableList<SetPoint> setPointsEndOuter = FXCollections.observableArrayList();
+    private final ObservableList<SetPoint> setPointsStartOuter = FXCollections.observableArrayList();
+    private final ObservableList<SetPoint> setPointsEndOuter = FXCollections.observableArrayList();
 
-    public final ObservableList<SetPoint> setPointsStart2ndOuter = FXCollections.observableArrayList();
-    public final ObservableList<SetPoint> setPointsEnd2ndOuter = FXCollections.observableArrayList();
+    private final ObservableList<SetPoint> setPointsStart2ndOuter = FXCollections.observableArrayList();
+    private final ObservableList<SetPoint> setPointsEnd2ndOuter = FXCollections.observableArrayList();
 
     @Override
     public void start(Stage primaryStage)
     {
+        logArea = new TextArea();
+
+        Button btnTune = new Button("Tune GCode");
+        Button btnBrowseGCode = new Button("Open GCode");
+
         restoreStateFromPreferences();
 
         Tab tabOuterPerimeter = new EditTab("Outer Perimeter", "Outer", setPointsStartOuter, setPointsEndOuter);
@@ -65,16 +68,16 @@ public class tuner extends Application {
 
         tabPane.getTabs().addAll(tabOuterPerimeter, tab2ndPerimeter, tabOther);
 
-        btnBrowseGCode.setText("Open GCode");
         btnBrowseGCode.setOnAction(event -> {
-            String initDir = preferences.get("lastDirectoryBrowsed", null);
-
             FileChooser fileChooser = new FileChooser();
-            fileChooser.setTitle("Open GCode File");
-            if(!new File(initDir).exists())
-                initDir = null;
 
-            fileChooser.setInitialDirectory(initDir != null ? new File(initDir) : null);
+            String initialDirectory = preferences.get("lastDirectoryBrowsed", null);
+            if(initialDirectory == null || !new File(initialDirectory).exists())
+                fileChooser.setInitialDirectory(null);
+            else
+                fileChooser.setInitialDirectory(new File(initialDirectory));
+
+            fileChooser.setTitle("Open GCode File");
             File file = fileChooser.showOpenDialog(primaryStage);
             if(file != null) {
                 preferences.put("lastDirectoryBrowsed", file.getParent());
@@ -132,6 +135,10 @@ public class tuner extends Application {
         int ok = 01;
     }
 
+    public static void main(String[] args) {
+        Application.launch(args);
+    }
+
     private void restoreStateFromPreferences() {
         String strSetPointsStart1 = preferences.get("setPointsStartOuter", emptyTableJson);
         for(Object o: gson.fromJson(strSetPointsStart1, ArrayList.class)) {
@@ -169,7 +176,7 @@ public class tuner extends Application {
                         continue;
 
                     GCodeCommand xyTravelMove = Heuristics.getLastXYTravelMove(perimeter.gCodesTravel);
-                    GCodeCommand zTravelMove = Heuristics.getLastZTravelMove(perimeter.gCodesTravel);
+                    GCodeCommand zTravelMove = Heuristics.getOnlyZTravelMove(perimeter.gCodesTravel);
 
                     List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStartOuter, setPointsEndOuter);
 
@@ -183,7 +190,7 @@ public class tuner extends Application {
 
                     newGCodes.remove(0);
 
-                    if (!((GCodeCommand) newGCodes.get(0)).has('F'))
+                    if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
                         ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
 
                     perimeter.gCodesLoop = newGCodes;
@@ -205,7 +212,7 @@ public class tuner extends Application {
 
                     newGCodes.remove(0);
 
-                    if (!((GCodeCommand) newGCodes.get(0)).has('F'))
+                    if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
                         ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
 
                     perimeter.gCodesLoop = newGCodes;

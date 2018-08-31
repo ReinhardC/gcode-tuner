@@ -61,6 +61,9 @@ public class GCodeCommand extends GCode {
                 (params.containsKey('Z') ? "Z" + d3.format(params.get('Z')) + " " : "") +
                 (params.containsKey('E') ? "E" + d5.format(params.get('E')) + " " : "") +
                 (params.containsKey('F') ? "F" + d0.format(params.get('F')) + " " : "") +
+                (params.containsKey('I') ? "I" + d5.format(params.get('I')) + " " : "") +
+                (params.containsKey('J') ? "J" + d5.format(params.get('J')) + " " : "") +
+                (params.containsKey('K') ? "K" + d5.format(params.get('K')) + " " : "") +
                 (params.containsKey('P') ? "P" + d0.format(params.get('P')) + " " : "") +
                 (params.containsKey('S') ? "S" + d0.format(params.get('S')) + " " : "") +
                 (params.containsKey('T') ? "T" + d0.format(params.get('T')) + " " : "");

@@ -40,29 +40,26 @@ public class Heuristics {
 
     public static GCodeCommand getLastXYTravelMove(List<GCode> gCodesTravel) {
 
-        Object[] xyOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('X') && !((GCodeCommand) gCode1).has('Z')).toArray();
+        Object[] xyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('X') && ((GCodeCommand) gCode1).has('Y') && !((GCodeCommand) gCode1).has('Z')).toArray();
 
-        if(xyOnlyTravelMoves.length == 0)
-            System.out.println("Heuristics assertion failed, no travel move found");
+        // if(xyTravelMoves.length == 0)
+        //    System.out.println("Heuristics assertion failed, no travel move found");
 
-        return xyOnlyTravelMoves.length == 0 ? null : ((GCodeCommand)xyOnlyTravelMoves[xyOnlyTravelMoves.length-1]);
+        return xyTravelMoves.length == 0 ? null : ((GCodeCommand)xyTravelMoves[xyTravelMoves.length-1]);
     }
 
-    public static GCodeCommand getLastZTravelMove(List<GCode> gCodesTravel) {
+    public static GCodeCommand getOnlyZTravelMove(List<GCode> gCodesTravel) {
 
-        Object[] zOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X')).toArray();
+        Object[] zTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X') && !((GCodeCommand) gCode1).has('Y')).toArray();
 
-        if(zOnlyTravelMoves.length == 0)
-            System.out.println("Heuristics assertion failed, no Z travel move found");
-
-        return zOnlyTravelMoves.length == 0 ? null : ((GCodeCommand)zOnlyTravelMoves[zOnlyTravelMoves.length-1]);
+        return zTravelMoves.length != 1 ? null : ((GCodeCommand)zTravelMoves[zTravelMoves.length-1]);
     }
 
     public static double getLayerHeight(List<GCode> gCodesTravel) {
-        Object[] zOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X')).toArray();
+        Object[] zOnlyTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X') && !((GCodeCommand) gCode1).has('Y')).toArray();
 
-        if(zOnlyTravelMoves.length == 0)
-            System.out.println("Heuristics assertion failed, no Z travel move found");
+        //if(zOnlyTravelMoves.length == 0)
+         //   System.out.println("Heuristics assertion failed, no Z travel move found");
 
         // use last Z
         return zOnlyTravelMoves.length == 0 ? 0.0 : ((GCodeCommand)zOnlyTravelMoves[zOnlyTravelMoves.length-1]).get('Z');

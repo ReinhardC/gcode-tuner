@@ -11,6 +11,8 @@ import java.io.*;
 import java.util.*;
 import java.util.stream.Stream;
 
+import static com.specularity.printing.tuner.logArea;
+
 class GCodeFile {
     private final File file;
 
@@ -22,6 +24,7 @@ class GCodeFile {
 
     void load() {
         MachineState currentState = new MachineState();
+        String lastMoveCommand = "G1";
         gCodes.clear();
         // wtf
         try (BufferedReader fileStream = new BufferedReader(new InputStreamReader(new DataInputStream(new FileInputStream(file))))) {
@@ -29,24 +32,28 @@ class GCodeFile {
             int nbLines = 0;
             while ((strLine = fileStream.readLine()) != null) {
                 nbLines++;
-                GCode gcode = GCodeFactory.produceFromString(strLine);
-                if (gcode != null) {
-                    if (gcode instanceof GCodeCommand) {
-                        GCodeCommand cmd = (GCodeCommand) gcode;
-                        if (cmd.command.equals("G1") || cmd.command.equals("G0")) {
-                            if (cmd.has('X'))
-                                currentState.updateX(cmd.get('X'));
-                            if (cmd.has('Y'))
-                                currentState.updateY(cmd.get('Y'));
-                            if (cmd.has('Z'))
-                                currentState.updateZ(cmd.get('Z'));
-                            if (cmd.has('F'))
-                                currentState.updateFeedrate(cmd.get('F'));
+                List<GCode> gcodes = GCodeFactory.gCodesFromLine(strLine, lastMoveCommand);
+                for (GCode gcode : gcodes) {
+                    if (gcode != null) {
+                        if (gcode instanceof GCodeCommand) {
+                            GCodeCommand cmd = (GCodeCommand) gcode;
+                            if (cmd.command.equals("G0") || cmd.command.equals("G1") || cmd.command.equals("G2") || cmd.command.equals("G3")) {
+                                lastMoveCommand = cmd.command;
+                                if (cmd.has('X'))
+                                    currentState.updateX(cmd.get('X'));
+                                if (cmd.has('Y'))
+                                    currentState.updateY(cmd.get('Y'));
+                                if (cmd.has('Z'))
+                                    currentState.updateZ(cmd.get('Z'));
+                                if (cmd.has('F'))
+                                    currentState.updateFeedrate(cmd.get('F'));
+                            }
                         }
+                        currentState.setOriginalLineNumber(nbLines);
+                        gcode.setState(new MachineState(currentState));
+                        gCodes.add(gcode);
                     }
-                    currentState.setOriginalLineNumber(nbLines);
-                    gcode.setState(new MachineState(currentState));
-                    gCodes.add(gcode);
+                    else logArea.appendText("unrecognized GCode: " + strLine + "\n");
                 }
             }
         } catch (FileNotFoundException ignored) {
@@ -63,7 +70,7 @@ class GCodeFile {
         List<GCode> gCodesTmp = new ArrayList<>();
 
         Vector3d lastToolheadPosition = new Vector3d(0, 0, -1);
-        GCodePerimeter lastPerimeter = null;
+        GCodePerimeter previousPerimeter = null;
 
         List<GCodePerimeter> currentPerimeterGroup = new ArrayList<>();
 
@@ -96,7 +103,8 @@ class GCodeFile {
                             beginTravelMovesIx++;
 
                         int endTravelMovesIx = firstPerimeterPtIx;
-                        while (gCodesTmp.get(endTravelMovesIx).getState().isValidXY() &&
+                        while (endTravelMovesIx < gCodesTmp.size() &&
+                                gCodesTmp.get(endTravelMovesIx).getState().isValidXY() &&
                                 gCodesTmp.get(endTravelMovesIx).getState().getXY().equals(firstLoopPoint.getState().getXY()))
                             endTravelMovesIx++;
 
@@ -110,7 +118,10 @@ class GCodeFile {
 
                         //loop points
                         perimeter.gCodesLoop.addAll(gCodesTmp.subList(endTravelMovesIx, curIx + 1));
-                        perimeter.setState(perimeter.gCodesLoop.get(0).getState());
+                        if(perimeter.gCodesLoop.size() > 0)
+                            perimeter.setState(perimeter.gCodesLoop.get(0).getState());
+                        else
+                            perimeter.setState(perimeter.gCodesTravel.get(0).getState());
 
                         // possible perimeter comment from file
                         int j = 0;
@@ -122,29 +133,30 @@ class GCodeFile {
 
                         perimeter.updateBbx();
 
+                        boolean bRestartGroup = true;
+
                         // assign size ids to perimeters (works for outer perimeters only)
-                        if(lastPerimeter != null && lastPerimeter.getState().getZ() == perimeter.getState().getZ()) // same layer?
+                        if(previousPerimeter != null && previousPerimeter.getState().getZ() == perimeter.getState().getZ()) // same layer?
                         {
-                            Vector2d v = Heuristics.getLastXYTravelMove(perimeter.gCodesTravel).getVector2d();
-                            v.sub(Heuristics.getLastXYTravelMove(lastPerimeter.gCodesTravel).getVector2d());
-                            double perimeterDistance = v.length();
+                            double perimeterDistance = 1000.0;
 
-                            if(currentPerimeterGroup.size() == 0 || perimeterDistance < 1.0/*mm*/) // very short distance? belonging to same perimeter group
+                            GCodeCommand lastTravelMoveThis = Heuristics.getLastXYTravelMove(perimeter.gCodesTravel);
+                            GCodeCommand lastTravelMovePrevious = Heuristics.getLastXYTravelMove(previousPerimeter.gCodesTravel);
+                            if(lastTravelMoveThis != null && lastTravelMovePrevious != null) {
+                                Vector2d v = lastTravelMoveThis.getVector2d();
+                                v.sub(lastTravelMovePrevious.getVector2d());
+                                perimeterDistance = v.length();
+                            }
+
+                            if(currentPerimeterGroup.size() == 0 || perimeterDistance < 1.0/*mm*/) { // very short distance? belonging to same perimeter group
                                 currentPerimeterGroup.add(perimeter);
-                            else {
-                                if(currentPerimeterGroup.size() >= 2) {
-                                    if (checkInverted(currentPerimeterGroup)) // currentPerimeterGroup.get(0).getBbxArea() < currentPerimeterGroup.get(currentPerimeterGroup.size()-1).getBbxArea())
-                                        Collections.reverse(currentPerimeterGroup);
-
-                                    for (int i1 = 0; i1 < currentPerimeterGroup.size(); i1++)
-                                        currentPerimeterGroup.get(i1).shellIx = i1 + 1;
-                                }
-
-                                currentPerimeterGroup.clear();
-                                currentPerimeterGroup.add(perimeter);
+                                bRestartGroup = false;
                             }
                         }
-                        else {
+
+                        // was not added?
+                        if(bRestartGroup)
+                        {
                             if(currentPerimeterGroup.size() >= 2) {
                                 if(checkInverted(currentPerimeterGroup)) // currentPerimeterGroup.get(0).getBbxArea() < currentPerimeterGroup.get(currentPerimeterGroup.size()-1).getBbxArea())
                                     Collections.reverse(currentPerimeterGroup);
@@ -162,7 +174,7 @@ class GCodeFile {
                         perimeterPointLookup.clear();
                         gCodesTmp.clear();
 
-                        lastPerimeter = perimeter;
+                        previousPerimeter = perimeter;
                     }
                 } else if (gcode.getState().isValidXY())
                     perimeterPointLookup.put(new Vector3d(currentToolheadPosition), curIx);
