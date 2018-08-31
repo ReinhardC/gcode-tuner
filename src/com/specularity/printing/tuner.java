@@ -18,10 +18,13 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import org.apache.commons.io.FilenameUtils;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.*;
 import java.util.prefs.Preferences;
 
 import static com.specularity.printing.VectorTools.getTriAngle;
@@ -29,19 +32,18 @@ import static com.specularity.printing.VectorTools.tunePerimeter;
 import static com.specularity.printing.ui.EditTab.emptyTableJson;
 import static com.specularity.printing.ui.EditTab.gson;
 
-
 public class tuner extends Application {
     private static String applicationTitle = "GCode Tuner V1.0a";
 
     public static TextArea logArea;
 
     public static Preferences preferences = Preferences.userNodeForPackage(tuner.class);
-    public static Font labelFont = Font.font("Regular", FontWeight.BOLD, 11.);
+    public static Font labelFont;
 
     private GCodeFile gCodeFile = null;
 
     /**
-     * todo: find better solution!
+     * todo: find better solution for keeping these!
      */
     private final ObservableList<SetPoint> setPointsStartOuter = FXCollections.observableArrayList();
     private final ObservableList<SetPoint> setPointsEndOuter = FXCollections.observableArrayList();
@@ -53,11 +55,72 @@ public class tuner extends Application {
     public void start(Stage primaryStage)
     {
         logArea = new TextArea();
+        labelFont = Font.font("Regular", FontWeight.BOLD, 11.);
 
         Button btnTune = new Button("Tune GCode");
         Button btnBrowseGCode = new Button("Open GCode");
 
         restoreStateFromPreferences();
+
+        MenuButton presetButton = new MenuButton("Restore");
+        presetButton.setOnMouseEntered(event -> {
+            presetButton.getItems().clear();
+            ArrayList<File> files = new ArrayList<File>(Arrays.asList(Objects.requireNonNull(new File("./presets").listFiles(pathname -> FilenameUtils.getExtension(pathname.toString()).equals("gtpreset")))));
+            files.forEach(file -> {
+                MenuItem mi = new MenuItem(FilenameUtils.removeExtension(file.getName()));
+                mi.setOnAction(event2 -> {
+                    try {
+                        String presetStr = new String(Files.readAllBytes(Paths.get(file.getAbsolutePath())), Charset.defaultCharset());
+                        String[] line = presetStr.split("\n");
+                        if(line.length != 4) {
+                            logArea.appendText("wrong preset format. should be 4 lines long.\n");
+                            return;
+                        }
+                        restoreFromString(setPointsStartOuter, line[0]);
+                        preferences.put("setPointsStartOuter", gson.toJson(setPointsStartOuter));
+                        restoreFromString(setPointsEndOuter, line[1]);
+                        preferences.put("setPointsEndOuter", gson.toJson(setPointsEndOuter));
+                        restoreFromString(setPointsStart2ndOuter, line[2]);
+                        preferences.put("setPointsStart2ndOuter", gson.toJson(setPointsStart2ndOuter));
+                        restoreFromString(setPointsEnd2ndOuter, line[3]);
+                        preferences.put("setPointsEnd2ndOuter", gson.toJson(setPointsEnd2ndOuter));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                });
+                presetButton.getItems().add(mi);
+            });
+        });
+
+        MenuButton removePresetButton = new MenuButton("Remove");
+        removePresetButton.setOnMouseEntered(event -> {
+            removePresetButton.getItems().clear();
+            ArrayList<File> files = new ArrayList<File>(Arrays.asList(Objects.requireNonNull(new File("./presets").listFiles(pathname -> FilenameUtils.getExtension(pathname.toString()).equals("gtpreset")))));
+            files.forEach(file -> {
+                MenuItem mi = new MenuItem(FilenameUtils.removeExtension(file.getName()));
+                mi.setOnAction(event2 -> {
+                    file.delete();
+                });
+                removePresetButton.getItems().add(mi);
+            });
+        });
+
+                Button savePresetButton = new Button("Save");
+        savePresetButton.setOnAction(event -> {
+            TextInputDialog dia = new TextInputDialog("");
+            dia.setHeaderText("Enter a name for the preset.");
+            dia.setTitle("GCode Tuner");
+            dia.setGraphic(null);
+            dia.showAndWait().ifPresent(presetName -> {
+                try(PrintWriter out = new PrintWriter("./presets/"+presetName+".gtpreset")){
+                    out.write(gson.toJson(setPointsStartOuter) + "\n");
+                    out.write(gson.toJson(setPointsEndOuter) + "\n");
+                    out.write(gson.toJson(setPointsStart2ndOuter) + "\n");
+                    out.write(gson.toJson(setPointsEnd2ndOuter) + "\n");
+                    logArea.appendText("Preset "+presetName+ ".gtpreset saved in presets folder.");
+                } catch (FileNotFoundException ignored) {}
+            });
+        });
 
         Tab tabOuterPerimeter = new EditTab("Outer Perimeter", "Outer", setPointsStartOuter, setPointsEndOuter);
         Tab tab2ndPerimeter = new EditTab("2nd Outer Perimeter", "2ndOuter", setPointsStart2ndOuter, setPointsEnd2ndOuter);
@@ -101,10 +164,12 @@ public class tuner extends Application {
             logArea.appendText("tuned file written to " + fileName +".\n");
         });
 
+        Label presetLabel = new Label("Presets:");
+
         // A layout container for UI controls
         final BorderPane root = new BorderPane();
         root.setCenter(tabPane);
-        root.setTop(new HBox(btnBrowseGCode, btnTune));
+        root.setTop(new HBox(btnBrowseGCode, btnTune, presetLabel, savePresetButton, presetButton, removePresetButton));
 
         BorderPane logPane = new BorderPane();
         logPane.setCenter(logArea);
@@ -121,8 +186,12 @@ public class tuner extends Application {
 
         logArea.appendText("GCode Tuner started.\n");
 
-        HBox.setMargin(btnBrowseGCode, new Insets(12,12,12,12));
+        HBox.setMargin(btnBrowseGCode, new Insets(12,6,12,12));
         HBox.setMargin(btnTune, new Insets(12,18,12,0));
+        HBox.setMargin(presetLabel, new Insets(16,8,12,0));
+        HBox.setMargin(presetButton, new Insets(12,6,12,0));
+        HBox.setMargin(savePresetButton, new Insets(12,6,12,0));
+        HBox.setMargin(removePresetButton, new Insets(12,6,12,0));
 
         // Top level container for all view content
         Scene scene = new Scene(root, 600, 800);
@@ -131,38 +200,25 @@ public class tuner extends Application {
         primaryStage.setTitle(applicationTitle);
         primaryStage.setScene(scene);
         primaryStage.show();
-
-        int ok = 01;
     }
 
     public static void main(String[] args) {
         Application.launch(args);
     }
 
+    private void restoreFromString(ObservableList<SetPoint> setPoints, String string) {
+        setPoints.clear();
+        for(Object o: gson.fromJson(string, ArrayList.class)) {
+            LinkedTreeMap ltm = (LinkedTreeMap) o;
+            setPoints.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
+        }
+    }
+
     private void restoreStateFromPreferences() {
-        String strSetPointsStart1 = preferences.get("setPointsStartOuter", emptyTableJson);
-        for(Object o: gson.fromJson(strSetPointsStart1, ArrayList.class)) {
-            LinkedTreeMap ltm = (LinkedTreeMap) o;
-            setPointsStartOuter.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
-        }
-
-        String strSetPointsStart2 = preferences.get("setPointsStart2ndOuter", emptyTableJson);
-        for(Object o: gson.fromJson(strSetPointsStart2, ArrayList.class)) {
-            LinkedTreeMap ltm = (LinkedTreeMap) o;
-            setPointsStart2ndOuter.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
-        }
-
-        String strSetPointsEnd1 = preferences.get("setPointsEndOuter", emptyTableJson);
-        for(Object o: gson.fromJson(strSetPointsEnd1, ArrayList.class)) {
-            LinkedTreeMap ltm = (LinkedTreeMap) o;
-            setPointsEndOuter.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
-        }
-
-        String strSetPointsEnd2 = preferences.get("setPointsEnd2ndOuter", emptyTableJson);
-        for(Object o: gson.fromJson(strSetPointsEnd2, ArrayList.class)) {
-            LinkedTreeMap ltm = (LinkedTreeMap) o;
-            setPointsEnd2ndOuter.add(new SetPoint((Double)ltm.get("offset"), (Double)ltm.get("angle"), (Double)ltm.get("extrusionPct"), (Double)ltm.get("feedratePct"), (Double)ltm.get("zoffset")));
-        }
+        restoreFromString(setPointsStartOuter, preferences.get("setPointsStartOuter", emptyTableJson));
+        restoreFromString(setPointsEndOuter, preferences.get("setPointsEndOuter", emptyTableJson));
+        restoreFromString(setPointsStart2ndOuter, preferences.get("setPointsStart2ndOuter", emptyTableJson));
+        restoreFromString(setPointsEnd2ndOuter, preferences.get("setPointsEnd2ndOuter", emptyTableJson));
     }
 
     void tune(GCodeFile file) {
@@ -221,3 +277,4 @@ public class tuner extends Application {
         }
     }
 }
+
