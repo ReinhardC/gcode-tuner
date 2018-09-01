@@ -36,7 +36,7 @@ import static com.specularity.printing.ui.EditTab.emptyTableJson;
 import static com.specularity.printing.ui.EditTab.gson;
 
 public class tuner extends Application {
-    private static String applicationTitle = "GCode Tuner V1.0";
+    private static String applicationTitle = "GCode Tuner V1.1";
 
     public static TextArea logArea;
     Button btnTune;
