@@ -147,7 +147,7 @@ class GCodeFile {
                        if (lastTravelMoveThis != null && lastTravelMovePrevious != null) {
                            Vector2d v = lastTravelMoveThis.getVector2d();
                            v.sub(lastTravelMovePrevious.getVector2d());
-                           if (v.length() < 1.0/*mm*/) {
+                           if (v.length() < 0.7/*mm*/) {
                                currentPerimeterGroup.perimeters.add(perimeter);
                                bGroupFinished = false;
                            }
