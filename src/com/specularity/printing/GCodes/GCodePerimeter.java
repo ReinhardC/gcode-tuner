@@ -9,10 +9,8 @@ public class GCodePerimeter extends GCode {
     public List<GCode> gCodesTravel = new ArrayList<>();
     public List<GCode> gCodesLoop = new ArrayList<>();
 
-    private double bbxMinX, bbxMaxX, bbxMinY, bbxMaxY;
-
-    public int shellIx = 1; // 1 = outer, 2 = 2nd outer, .. inner
-
+    public double bbxMinX, bbxMaxX, bbxMinY, bbxMaxY;
+    
     @Override
     public String toString() {
         return "nb gCodesLoop=" + gCodesLoop.size() + (comment != null ? comment : "");

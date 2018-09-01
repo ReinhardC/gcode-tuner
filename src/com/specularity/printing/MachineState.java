@@ -4,6 +4,15 @@ import javax.vecmath.Vector2d;
 import javax.vecmath.Vector3d;
 
 public class MachineState {
+    @Override
+    public String toString() {
+        return "MachineState{" +
+                "#" + originalLineNumber +
+                ", p=" + toolheadPosition +
+                ", fr=" + feedrate +
+                '}';
+    }
+
     private boolean isValidXY;
     private boolean isValidZ;
     private boolean isValidFeedrate;

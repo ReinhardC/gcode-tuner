@@ -6,185 +6,13 @@ import com.specularity.printing.GCodes.GCodePerimeter;
 import javafx.collections.ObservableList;
 
 import javax.vecmath.Vector2d;
+import javax.vecmath.Vector3d;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static com.specularity.printing.tuner.preferences;
 
 public class VectorTools {
-
-    public static List<GCode> tunePerimeter(GCodePerimeter perimeter, ObservableList<SetPoint> setPointsStart, ObservableList<SetPoint> setPointsEnd)
-    {
-        List<GCode> gCodesInput = perimeter.gCodesLoop;
-        ArrayList<GCode> gCodesOutput = new ArrayList<>();
-
-        GCode firstGCode = gCodesInput.get(0);
-
-        GCodeCommand lastXYTravelMove = Heuristics.getLastXYTravelMove(perimeter.gCodesTravel);
-        if(setPointsStart.get(0).getZoffset() != 0)
-            lastXYTravelMove.put('Z', firstGCode.getState().getToolheadPosition().getZ() + setPointsStart.get(0).getZoffset());
-
-        double perimeterExtrudeFactor = Heuristics.getExtrudeFactor(gCodesInput);
-
-        List<Vector2d> originalMoves = gCodesInput.stream()
-                .filter(gCode1 -> gCode1 instanceof GCodeCommand)
-                .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());
-
-        // rotate last to first
-        originalMoves.add(0, originalMoves.get(originalMoves.size()-1));
-        originalMoves.remove(originalMoves.size()-1); // remove last point which is same as first point
-
-        double minExtrusionD = preferences.getDouble("minExtrusionDistance", 0.0001);
-
-        Double totalPathAngle = 0.0;
-        Vector2d pathOffset = new Vector2d(0.0, 0.0); // used for rotation
-
-        Vector2d previousMove = null;
-        double nextExtrusionPoint = 0.0;
-
-        //
-        // replace start of extruded path
-        //
-        // reversed so the rotation can be applied to the points
-        //
-
-        List<List<Vector2d>> startPaths = new ArrayList<>(); // used only for reversing
-
-        for (int i = setPointsStart.size() - 2; i >= 0; i--)
-        {
-            double from = setPointsStart.get(i).getOffset();
-            double to = setPointsStart.get(i+1).getOffset();
-
-            List<Vector2d> startPath = resampleVectorPath(originalMoves, from, to);
-            for (Vector2d v: startPath)
-                v.add(pathOffset);
-
-            totalPathAngle -= setPointsStart.get(i+1).getAngle(); // negate so positive angle is always inward into model
-
-            Vector2d newPathOffset = new Vector2d(startPath.get(0));
-            rotatePathAround(startPath, startPath.get(startPath.size() - 1), totalPathAngle);
-            newPathOffset.sub(startPath.get(0));
-            pathOffset.sub(newPathOffset);
-
-            startPath.forEach(VectorTools::round3Vector2d);
-            removeDoublePoints(startPath);
-            if(i != 0) {
-                startPath.remove(0);
-            }
-
-            startPaths.add(0, startPath);
-        }
-
-        boolean zModStart = setPointsStart.stream().anyMatch(setPoint -> setPoint.getZoffset() != 0);
-
-        for (int i = 0; i < setPointsStart.size()-1; i++) // add startPaths in forward order
-        {
-            // System.out.println(startPaths.get(i) + " (startPath with " + setPointsStart.get(i+1).getExtrusionPct() + ")");
-            for (Vector2d move : startPaths.get(i)) {
-                GCodeCommand newMove = new GCodeCommand("G1", "; GCodeTuner - replaced start points");
-                newMove.setState(new MachineState(firstGCode.getState()));
-                newMove.putVector2d(move);
-                newMove.put('F', newMove.getState().getFeedrate() * (setPointsStart.get(i+1).getFeedratePct() / 100.));
-                if(zModStart)
-                    newMove.put('Z', newMove.getState().getToolheadPosition().getZ() + setPointsStart.get(i+1).getZoffset());
-
-                if(previousMove != null) {
-                    previousMove.sub(move);
-                    double extrusionD = previousMove.length() * perimeterExtrudeFactor * (setPointsStart.get(i + 1).getExtrusionPct() / 100.);
-                    if(extrusionD < minExtrusionD) {
-                        previousMove = move;
-                        continue;
-                    }
-                    nextExtrusionPoint += extrusionD;
-                }
-                newMove.put('E', nextExtrusionPoint);
-                gCodesOutput.add(newMove);
-                previousMove = move;
-            }
-        }
-
-        //
-        //                       REPLACE MAIN EXTRUSION
-        //
-
-        List<Vector2d> mainExtrudedPath = resampleVectorPath(originalMoves, setPointsStart.get(setPointsStart.size() - 1).getOffset(), getCycleLength(originalMoves) + setPointsEnd.get(0).getOffset());
-        if(setPointsStart.size() != 1)
-            mainExtrudedPath.remove(0);
-
-        // System.out.println(mainExtrudedPath + " (mainExtrudedPath with 100)");
-        for (int i = 0; i < mainExtrudedPath.size(); i++) {
-            Vector2d v = mainExtrudedPath.get(i);
-            GCodeCommand newMove = new GCodeCommand("G1", null);
-            newMove.setState(new MachineState(firstGCode.getState()));
-            newMove.putVector2d(v);
-            if(previousMove != null) {
-                previousMove.sub(v);
-                nextExtrusionPoint += previousMove.length() * perimeterExtrudeFactor;
-            }
-            newMove.put('E', nextExtrusionPoint);
-            gCodesOutput.add(newMove);
-            previousMove = v;
-        }
-
-        //
-        // replace end of extruded path
-        //
-
-        pathOffset.set(0., 0.);
-        totalPathAngle = 0.;
-
-        boolean zModEnd = setPointsEnd.stream().anyMatch(setPoint -> setPoint.getZoffset() != 0);
-
-        for (int i = 0; i < setPointsEnd.size()-1; i++)
-        {
-            double from = getCycleLength(originalMoves) + setPointsEnd.get(i).getOffset();
-            double to =  getCycleLength(originalMoves) + setPointsEnd.get(i+1).getOffset();
-
-            List<Vector2d> endPath = resampleVectorPath(originalMoves, from, to);
-            for (Vector2d v: endPath)
-                v.add(pathOffset);
-
-            totalPathAngle += setPointsEnd.get(i).getAngle();
-
-            Vector2d newPathOffset = new Vector2d(endPath.get(endPath.size()-1));
-            rotatePathAround(endPath, endPath.get(0), totalPathAngle);
-            newPathOffset.sub(endPath.get(endPath.size()-1));
-            pathOffset.sub(newPathOffset);
-
-            endPath.forEach(VectorTools::round3Vector2d);
-            removeDoublePoints(endPath);
-            endPath.remove(0);
-
-            //if(endPath.size() > 0)
-              //  System.out.println(endPath + " (endPath with " + setPointsEnd.get(i+1).getExtrusionPct() + ")");
-
-            for (Vector2d move : endPath) {
-                GCodeCommand newMove = new GCodeCommand("G1", "; GCodeTuner - replaced end points");
-                newMove.setState(new MachineState(firstGCode.getState()));
-                newMove.putVector2d(move);
-                newMove.put('F', newMove.getState().getFeedrate() * (setPointsEnd.get(i+1).getFeedratePct() / 100.));
-                if(zModEnd)
-                    newMove.put('Z', newMove.getState().getToolheadPosition().getZ() + setPointsEnd.get(i+1).getZoffset());
-
-                if(previousMove != null) {
-                    previousMove.sub(move);
-                    nextExtrusionPoint += previousMove.length() * perimeterExtrudeFactor * (setPointsEnd.get(i+1).getExtrusionPct() / 100);
-                }
-                newMove.put('E', nextExtrusionPoint);
-
-                gCodesOutput.add(newMove);
-                previousMove = move;
-            }
-        }
-
-        if(setPointsEnd.get(setPointsEnd.size()-1).getZoffset() != 0) {
-            GCodeCommand cmd = new GCodeCommand("G1", "; back to old Z");
-            cmd.put('Z', firstGCode.getState().getZ());
-            gCodesOutput.add(cmd);
-        }
-
-        return gCodesOutput;
-    }
 
     public static List<Vector2d> resampleVectorPath(List<Vector2d> input, double from, double to) {
 
@@ -316,12 +144,51 @@ public class VectorTools {
         point.y = rotated_y + around.y;
     }
 
+    public static double getSignedTravelAngle(Vector2d p1, Vector2d p2, Vector2d p3) {
+        Vector3d p1_3d = new Vector3d(p1.x, p1.y, 0.);
+        Vector3d p2_3d = new Vector3d(p2.x, p2.y, 0.);
+        Vector3d p3_3d = new Vector3d(p3.x, p3.y, 0.);
+        p3_3d.sub(p2_3d);
+        p2_3d.sub(p1_3d);
+        double angle = p3_3d.angle(p2_3d);
+        return (cross(p3_3d, p2_3d).z > 0 ? -1 : 1) * Math.toDegrees(angle) ;
+    }
+
+    public static Vector3d cross(Vector3d v1, Vector3d v2)
+    {
+        Vector3d v = new Vector3d();
+        v.cross(v1, v2);
+        return v;
+    }
+
     public static double getTriAngle(Vector2d origin, Vector2d p1, Vector2d p2) {
         Vector2d v1 = new Vector2d(p1);
         Vector2d v2 = new Vector2d(p2);
         v1.sub(origin);
         v2.sub(origin);
         return Math.toDegrees(v1.angle(v2));
+    }
+
+    public static boolean TriAngleSign(Vector2d origin, Vector2d p1, Vector2d p2)
+    {
+        Vector3d v1 = new Vector3d(origin.x, origin.y, 0.0);
+        Vector3d v2 = new Vector3d(origin.x, origin.y, 0.0);
+        v1.sub(new Vector3d(p1.x, p1.y, 0.0));
+        v2.sub(new Vector3d(p2.x, p2.y, 0.0));
+        v1.cross(v1, v2);
+
+        return v1.z > 0;
+    }
+
+    public static boolean TriAngleSign(Vector3d origin, Vector3d p1, Vector3d p2)
+    {
+        Vector3d v1 = new Vector3d(origin);
+        Vector3d v2 = new Vector3d(origin);
+        v1.sub(p1);
+        v2.sub(p2);
+        v1.cross(v1, v2);
+
+        return v1.z > 0;
     }
 
     public static void round3Vector2d(Vector2d v) {
