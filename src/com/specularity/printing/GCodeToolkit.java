@@ -11,8 +11,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static com.specularity.printing.VectorTools.*;
+import static com.specularity.printing.tuner.log;
 import static com.specularity.printing.tuner.logArea;
 import static com.specularity.printing.tuner.preferences;
+import static jdk.nashorn.internal.runtime.regexp.joni.Config.log;
 
 public class GCodeToolkit {
 
@@ -94,13 +96,13 @@ public class GCodeToolkit {
         moves.addAll(moves2.subList(0, shiftIx+1));
 
         if (perimeter.gCodesLoop.size() != moves.size()) {
-            logArea.appendText("Error: shift could not be applied to a perimeter because there were non-move commands in the loop part.\n");
+            log("Error: shift could not be applied to a perimeter because there were non-move commands in the loop part.");
             return false;
         }
 
         GCodeCommand travelMove = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
         if(travelMove == null) {
-            logArea.appendText("Error: shift could not be applied to a perimeter because there were no travel moves.\n");
+            log("Error: shift could not be applied to a perimeter because there were no travel moves.");
             return false;
         }
 

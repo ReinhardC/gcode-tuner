@@ -8,6 +8,7 @@ import com.specularity.printing.GCodes.GCodePerimeterGroup;
 import com.specularity.printing.ui.EditTab;
 import com.specularity.printing.ui.SettingsTab;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -39,8 +40,7 @@ public class tuner extends Application {
     private static String applicationTitle = "GCode Tuner V1.1";
 
     public static TextArea logArea;
-    Button btnTune;
-    
+
     public static Preferences preferences = Preferences.userNodeForPackage(tuner.class);
     public static Font labelFont;
 
@@ -79,24 +79,17 @@ public class tuner extends Application {
                 preferences.put("lastDirectoryBrowsed", file.getParent());
                 gCodeFile = new GCodeFile(file.getAbsolutePath());
                 gCodeFile.load();
-                btnTune.setDisable(false);
-                logArea.appendText(file.getAbsolutePath() + " stats:\n");
-                logArea.appendText(gCodeFile.gCodes.size() + " lines read\n");
-                logArea.appendText(gCodeFile.gCodes.size() + " after grouping\n");
-                logArea.appendText(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)\n");
-                logArea.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other\n");
-                logArea.appendText(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesLoop.size()).sum() + " inside groups\n");
+                log(file.getAbsolutePath() + " stats:");
+                log(gCodeFile.gCodes.size() + " lines read");
+                log(gCodeFile.gCodes.size() + " after grouping");
+                log(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)");
+                log(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other");
+                log(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesLoop.size()).sum() + " inside groups");
+                tune(gCodeFile);
+                log("tuning complete. writing now.");
+                String fileName = gCodeFile.writeCopy();
+                log("tuned file written to " + fileName +".");
             }
-        });
-
-        btnTune = new Button("Tune GCode");
-        btnTune.setDisable(true);
-        btnTune.setOnAction(event -> {
-            gCodeFile.load();
-            tune(gCodeFile);
-            logArea.appendText("tuning complete. writing now.\n");
-            String fileName = gCodeFile.writeCopy();
-            logArea.appendText("tuned file written to " + fileName +".\n");
         });
 
         Label presetLabel = new Label("Presets:");
@@ -113,7 +106,7 @@ public class tuner extends Application {
                     out.write(gson.toJson(setPointsEndOuter) + "\n");
                     out.write(gson.toJson(setPointsStart2ndOuter) + "\n");
                     out.write(gson.toJson(setPointsEnd2ndOuter) + "\n");
-                    logArea.appendText("Preset "+presetName+ ".gtpreset saved in presets folder.");
+                    log("Preset "+presetName+ ".gtpreset saved in presets folder.");
                 } catch (FileNotFoundException ignored) {}
             });
         });
@@ -129,7 +122,7 @@ public class tuner extends Application {
                         String presetStr = new String(Files.readAllBytes(Paths.get(file.getAbsolutePath())), Charset.defaultCharset());
                         String[] line = presetStr.split("\n");
                         if(line.length != 4) {
-                            logArea.appendText("wrong preset format. should be 4 lines long.\n");
+                            log("wrong preset format. should be 4 lines long.");
                             return;
                         }
                         restoreFromString(setPointsStartOuter, line[0]);
@@ -171,10 +164,9 @@ public class tuner extends Application {
 
         final BorderPane root = new BorderPane();
         root.setCenter(tabPane);
-        root.setTop(new HBox(btnBrowseGCode, btnTune, presetLabel, savePresetButton, presetButton, removePresetButton));
+        root.setTop(new HBox(btnBrowseGCode, presetLabel, savePresetButton, presetButton, removePresetButton));
 
-        HBox.setMargin(btnBrowseGCode, new Insets(12,6,12,12));
-        HBox.setMargin(btnTune, new Insets(12,18,12,0));
+        HBox.setMargin(btnBrowseGCode, new Insets(12,18,12,12));
         HBox.setMargin(presetLabel, new Insets(16,8,12,0));
         HBox.setMargin(presetButton, new Insets(12,6,12,0));
         HBox.setMargin(savePresetButton, new Insets(12,6,12,0));
@@ -183,6 +175,7 @@ public class tuner extends Application {
         BorderPane logPane = new BorderPane();
         logPane.setCenter(logArea);
         logArea.setEditable(false);
+        logArea.setFocusTraversable(true);
         logArea.setFont(new Font("Courier New", 11));
         logPane.setMaxHeight(120.0);
 
@@ -193,10 +186,10 @@ public class tuner extends Application {
 
         root.setBottom(logPane);
 
-        logArea.appendText("GCode Tuner started.\n");
+        log("GCode Tuner started.\n");
 
         root.setOnDragOver(event -> {
-            if (event.getGestureSource() != root && event.getDragboard().hasFiles()) 
+            if (event.getGestureSource() != root && event.getDragboard().hasFiles())
                 event.acceptTransferModes(TransferMode.COPY_OR_MOVE);
             event.consume();
         });
@@ -205,21 +198,24 @@ public class tuner extends Application {
             Dragboard db = event.getDragboard();
             boolean success = false;
             if (db.hasFiles() && db.getFiles().size() == 1) {
-                gCodeFile = new GCodeFile( db.getFiles().get(0).getAbsolutePath());
+                gCodeFile = new GCodeFile(db.getFiles().get(0).getAbsolutePath());
                 gCodeFile.load();
-                btnTune.setDisable(false);
-                logArea.appendText(db.getFiles().get(0).getAbsolutePath() + " stats:\n");
-                logArea.appendText(gCodeFile.gCodes.size() + " lines read\n");
-                logArea.appendText(gCodeFile.gCodes.size() + " after grouping\n");
-                logArea.appendText(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)\n");
-                logArea.appendText(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other\n");
-                logArea.appendText(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesLoop.size()).sum() + " inside groups\n");
+                log(db.getFiles().get(0).getAbsolutePath() + " stats:");
+                log(gCodeFile.gCodes.size() + " lines read");
+                log(gCodeFile.gCodes.size() + " after grouping");
+                log(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)");
+                log(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other");
+                log(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesLoop.size()).sum() + " inside groups");
+                tune(gCodeFile);
+                log("tuning complete. writing now.");
+                String fileName = gCodeFile.writeCopy();
+                log("tuned file written to " + fileName +".");
                 success = true;
             }
             event.setDropCompleted(success);
             event.consume();
         });
-        
+
         // Top level container for all view content
         Scene scene = new Scene(root, 600, 800);
 
@@ -228,26 +224,33 @@ public class tuner extends Application {
         primaryStage.setScene(scene);
         primaryStage.show();
     }
-        
+
+    static public void log(String text)
+    {
+       logArea.appendText(text+"\n");
+       logArea.setWrapText(true);
+       logArea.setScrollTop(Double.MAX_VALUE);
+    }
+    
     void tune(GCodeFile file) {
         for (GCode gCode : file.gCodes) {
             if (gCode instanceof GCodePerimeterGroup) {
                 GCodePerimeterGroup group = (GCodePerimeterGroup) gCode;
                 GCodePerimeter previousPerimeter = null;
-                
+
                 boolean bInner = group.isInnerPerimeter();
                 boolean bFirstShellTuned = false;
                 boolean bFirstShellShifted = false;
 
                 for(int shellIx=1; shellIx <= group.perimeters.size(); shellIx++) {
-                    
+
                     GCodePerimeter perimeter = (GCodePerimeter) group.perimeters.get(bInner ? group.perimeters.size()-shellIx : shellIx-1 );
-                    
+
                     double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
                     if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0)) {
                         continue;
                     }
-                    
+
                     if(preferences.get("shiftLayerStartToMaximumConcaveAngle", "on").equals("on")) { // && !bFirstShellTuned) {
                         if (previousPerimeter == null)
                             bFirstShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter));
@@ -265,14 +268,14 @@ public class tuner extends Application {
 
                     GCodeCommand xyTravelMove = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
                     GCodeCommand zTravelMove = GCodeToolkit.getOnlyZTravelMove(perimeter.gCodesTravel);
-         
+
                     if(shellIx == 1) {
                         if(preferences.get("preventLayerChangeOnOuterPerimeter", "on").equals("on") && (zTravelMove != null) && (zTravelMove.getState().getOriginalLineNumber() > xyTravelMove.getState().getOriginalLineNumber())) {
                             GCodeCommand tmp = new GCodeCommand(xyTravelMove);
                             xyTravelMove.set(zTravelMove);
                             zTravelMove.set(tmp);
                         }
-                        
+
                         List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStartOuter, setPointsEndOuter);
 
                         xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
@@ -283,7 +286,7 @@ public class tuner extends Application {
                             ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
 
                         perimeter.gCodesLoop = newGCodes;
-                        
+
                         bFirstShellTuned = true;
                     }
                     else if(shellIx == 2) {

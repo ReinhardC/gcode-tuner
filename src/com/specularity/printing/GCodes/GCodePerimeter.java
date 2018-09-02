@@ -5,6 +5,8 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.specularity.printing.VectorTools.getSignedTravelAngle;
+
 public class GCodePerimeter extends GCode {
     public List<GCode> gCodesTravel = new ArrayList<>();
     public List<GCode> gCodesLoop = new ArrayList<>();

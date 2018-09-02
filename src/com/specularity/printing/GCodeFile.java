@@ -8,6 +8,9 @@ import java.io.*;
 import java.util.*;
 import java.util.stream.Stream;
 
+import static com.specularity.printing.VectorTools.TriAngleSign;
+import static com.specularity.printing.VectorTools.getSignedTravelAngle;
+import static com.specularity.printing.tuner.log;
 import static com.specularity.printing.tuner.logArea;
 
 class GCodeFile {
@@ -50,7 +53,7 @@ class GCodeFile {
                         gcode.setState(new MachineState(currentState));
                         gCodes.add(gcode);
                     }
-                    else logArea.appendText("unrecognized GCode: " + strLine + "\n");
+                    else log("unrecognized GCode: " + strLine);
                 }
             }
         } catch (FileNotFoundException ignored) {
@@ -126,7 +129,7 @@ class GCodeFile {
                    perimeter.gCodesLoop.addAll(gCodesTmp.subList(endTravelMovesIx, tmpLastIx + 1));
                    if (perimeter.gCodesLoop.size() > 0)
                        perimeter.setState(perimeter.gCodesLoop.get(0).getState());
-                
+          
                    // possible perimeter comment from file
                    int j = 0;
                    while (j++ < 5)
@@ -136,18 +139,24 @@ class GCodeFile {
                        }
 
                    perimeter.updateBbx();
+                       
+                   // unknown trailing commands (infill, support...) that are not travel moves
+                   gCodes.addAll(gCodesTmp.subList(0, beginTravelMovesIx));
 
+                   if(currentPerimeterGroup == null)
+                        currentPerimeterGroup = new GCodePerimeterGroup(perimeter);
+                   
                    boolean bGroupFinished = true;
 
-                   // assign size ids to perimeters (works for outer perimeters only)
-                   if (previousPerimeter != null && previousPerimeter.getState().getZ() == perimeter.getState().getZ()) // same layer?
+                   // same layer, no in between commands?
+                   if (previousPerimeter != null && previousPerimeter.getState().getZ() == perimeter.getState().getZ() && beginTravelMovesIx == 0) 
                    {
                        GCodeCommand lastTravelMoveThis = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
                        GCodeCommand lastTravelMovePrevious = GCodeToolkit.getLastXYTravelMove(previousPerimeter.gCodesTravel);
                        if (lastTravelMoveThis != null && lastTravelMovePrevious != null) {
                            Vector2d v = lastTravelMoveThis.getVector2d();
                            v.sub(lastTravelMovePrevious.getVector2d());
-                           if (v.length() < 0.7/*mm*/) {
+                           if (v.length() < 0.7) {
                                currentPerimeterGroup.perimeters.add(perimeter);
                                bGroupFinished = false;
                            }
@@ -156,20 +165,16 @@ class GCodeFile {
 
                    // was not added?
                    if (bGroupFinished) {
-                       if (previousPerimeter != null) {
-                           if (currentPerimeterGroup.perimeters.size() != 1) {
-                               currentPerimeterGroup.setState(currentPerimeterGroup.perimeters.get(0).getState());
-                               currentPerimeterGroup.updateBbx();
-                               gCodes.add(currentPerimeterGroup);
-                           } else
-                               gCodes.add(currentPerimeterGroup.perimeters.get(0));
-                       }
-                       currentPerimeterGroup = new GCodePerimeterGroup(perimeter);
+                       if (currentPerimeterGroup.perimeters.size() != 1) {
+                           currentPerimeterGroup.setState(currentPerimeterGroup.perimeters.get(0).getState());
+                           currentPerimeterGroup.updateBbx();
+                           gCodes.add(currentPerimeterGroup);
+                       } else
+                           gCodes.add(currentPerimeterGroup.perimeters.get(0));
+                   
+                       currentPerimeterGroup = null;
                    }
-
-                   // unknown trailing commands (infill, support...) that are not travel moves
-                   gCodes.addAll(gCodesTmp.subList(0, beginTravelMovesIx));
-
+   
                    perimeterPointLookup.clear();
                    gCodesTmp.clear();
 

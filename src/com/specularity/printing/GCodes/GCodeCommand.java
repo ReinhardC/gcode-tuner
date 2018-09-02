@@ -39,7 +39,8 @@ public class GCodeCommand extends GCode {
     }
 
     public boolean has(char c) {
-        return params.containsKey(c);
+        boolean contains = params.containsKey(c);
+        return contains;
     }
 
     public void putVector2d(Vector2d v) {

@@ -8,6 +8,7 @@ import java.util.StringTokenizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static com.specularity.printing.tuner.log;
 import static com.specularity.printing.tuner.logArea;
 
 public class GCodeFactory {
@@ -62,7 +63,7 @@ public class GCodeFactory {
                     newCommand.put(k, pair.getValue());
                 }
                 else {
-                    logArea.appendText("Unrecognized command found, not collecting parameters: " + k + pair.getValue().intValue() + "\n");
+                    log("Unrecognized command found, not collecting parameters: " + k + pair.getValue().intValue());
                     newCommands.add(new GCodeComment(k + "" + pair.getValue().intValue() + " ; unrecognized"));
                 }
 
