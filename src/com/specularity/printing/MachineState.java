@@ -88,7 +88,7 @@ public class MachineState {
         isValidFeedrate = validFeedrate;
     }
 
-    public Vector3d getToolheadPosition() {
+    public Vector3d getXYZ() {
         return toolheadPosition;
     }
 

@@ -31,10 +31,15 @@ public class SettingsTab extends Tab {
         cbPreventLayerChangeOnOuterPerimeter.selectedProperty().addListener((v, ov, nv) -> preferences.put("preventLayerChangeOnOuterPerimeter", nv ? "on" : "off"));
         cbPreventLayerChangeOnOuterPerimeter.setPadding(new Insets(12,12,5,12));
 
-        CheckBox cbShiftLayerStartToMaximumConcaveAngle = new CheckBox("Shift Layer Start to maximum concave angle");
-        cbShiftLayerStartToMaximumConcaveAngle.setSelected(preferences.get("shiftLayerStartToMaximumConcaveAngle", "on").equals("on"));
-        cbShiftLayerStartToMaximumConcaveAngle.selectedProperty().addListener((v, ov, nv) -> preferences.put("shiftLayerStartToMaximumConcaveAngle", nv ? "on" : "off"));
-        cbShiftLayerStartToMaximumConcaveAngle.setPadding(new Insets(12,12,5,12));
+        CheckBox cbHideOuterPerimeterStartPointInCavity = new CheckBox("Hide outer perimeter start point in cavitiy");
+        cbHideOuterPerimeterStartPointInCavity.setSelected(preferences.get("hideOuterPerimeterStartPointInCavity", "on").equals("on"));
+        cbHideOuterPerimeterStartPointInCavity.selectedProperty().addListener((v, ov, nv) -> preferences.put("hideOuterPerimeterStartPointInCavity", nv ? "on" : "off"));
+        cbHideOuterPerimeterStartPointInCavity.setPadding(new Insets(12,12,5,12));
+
+        CheckBox cbAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint = new CheckBox("Align inner perimeter start points to outer perimeter start point");
+        cbAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint.setSelected(preferences.get("alignInnerPerimeterStartPointsToOuterPerimeterStartPoint", "on").equals("on"));
+        cbAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint.selectedProperty().addListener((v, ov, nv) -> preferences.put("alignInnerPerimeterStartPointsToOuterPerimeterStartPoint", nv ? "on" : "off"));
+        cbAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint.setPadding(new Insets(12,12,5,12));
 
         TextField txtMaxAngleBetweenSegments = new TextField();
         HBox hb1 = new HBox(new Label("Maximum angle between segments:\t"), txtMaxAngleBetweenSegments);
@@ -50,7 +55,7 @@ public class SettingsTab extends Tab {
         ((Label) hb2.getChildren().get(0)).setPadding(new Insets(5, 12, 2, 12));
         hb2.setPadding(new Insets(5,0,0,0));
 
-        box.getChildren().addAll(cbPreventLayerChangeOnOuterPerimeter, cbShiftLayerStartToMaximumConcaveAngle, hb1, hb2);
+        box.getChildren().addAll(cbPreventLayerChangeOnOuterPerimeter, cbHideOuterPerimeterStartPointInCavity, cbAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint, hb1, hb2);
 
         setContent(box);
     }

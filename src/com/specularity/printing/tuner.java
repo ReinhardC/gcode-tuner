@@ -63,7 +63,9 @@ public class tuner extends Application {
 
         restoreStateFromPreferences();
 
-        Button btnBrowseGCode = new Button("Open GCode");
+        Button btnProcessAgain= new Button("Reprocess");
+        
+        Button btnBrowseGCode = new Button("Process GCode");
         btnBrowseGCode.setOnAction(event -> {
             FileChooser fileChooser = new FileChooser();
 
@@ -79,6 +81,8 @@ public class tuner extends Application {
                 preferences.put("lastDirectoryBrowsed", file.getParent());
                 gCodeFile = new GCodeFile(file.getAbsolutePath());
                 gCodeFile.load();
+                primaryStage.setTitle(applicationTitle + " - " + gCodeFile.file.getName());
+                btnProcessAgain.setDisable(false);
                 log(file.getAbsolutePath() + " stats:");
                 log(gCodeFile.gCodes.size() + " lines read");
                 log(gCodeFile.gCodes.size() + " after grouping");
@@ -91,6 +95,24 @@ public class tuner extends Application {
                 log("tuned file written to " + fileName +".");
             }
         });
+        
+        btnProcessAgain.setDisable(true);
+        btnProcessAgain.setOnAction(event -> {
+            if(gCodeFile != null) {
+                gCodeFile.load();
+                log(gCodeFile.file.getAbsolutePath() + " stats:");
+                log(gCodeFile.gCodes.size() + " lines read");
+                log(gCodeFile.gCodes.size() + " after grouping");
+                log(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)");
+                log(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other");
+                log(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesLoop.size()).sum() + " inside groups");
+                tune(gCodeFile);
+                log("tuning complete. writing now.");
+                String fileName = gCodeFile.writeCopy();
+                log("tuned file written to " + fileName +".");
+            }
+        });
+
 
         Label presetLabel = new Label("Presets:");
 
@@ -164,9 +186,10 @@ public class tuner extends Application {
 
         final BorderPane root = new BorderPane();
         root.setCenter(tabPane);
-        root.setTop(new HBox(btnBrowseGCode, presetLabel, savePresetButton, presetButton, removePresetButton));
+        root.setTop(new HBox(btnBrowseGCode, btnProcessAgain, presetLabel, savePresetButton, presetButton, removePresetButton));
 
-        HBox.setMargin(btnBrowseGCode, new Insets(12,18,12,12));
+        HBox.setMargin(btnBrowseGCode, new Insets(12,6,12,12));
+        HBox.setMargin(btnProcessAgain, new Insets(12,18,12,0));
         HBox.setMargin(presetLabel, new Insets(16,8,12,0));
         HBox.setMargin(presetButton, new Insets(12,6,12,0));
         HBox.setMargin(savePresetButton, new Insets(12,6,12,0));
@@ -200,6 +223,8 @@ public class tuner extends Application {
             if (db.hasFiles() && db.getFiles().size() == 1) {
                 gCodeFile = new GCodeFile(db.getFiles().get(0).getAbsolutePath());
                 gCodeFile.load();
+                primaryStage.setTitle(applicationTitle + " - " + gCodeFile.file.getName());
+                btnProcessAgain.setDisable(false);
                 log(db.getFiles().get(0).getAbsolutePath() + " stats:");
                 log(gCodeFile.gCodes.size() + " lines read");
                 log(gCodeFile.gCodes.size() + " after grouping");
@@ -234,80 +259,122 @@ public class tuner extends Application {
     
     void tune(GCodeFile file) {
         for (GCode gCode : file.gCodes) {
+
+            boolean bTune = true;
+            boolean bFirstShellShifted = false;
+            
             if (gCode instanceof GCodePerimeterGroup) {
                 GCodePerimeterGroup group = (GCodePerimeterGroup) gCode;
                 GCodePerimeter previousPerimeter = null;
 
                 boolean bInner = group.isInnerPerimeter();
-                boolean bFirstShellTuned = false;
-                boolean bFirstShellShifted = false;
 
                 for(int shellIx=1; shellIx <= group.perimeters.size(); shellIx++) {
 
                     GCodePerimeter perimeter = (GCodePerimeter) group.perimeters.get(bInner ? group.perimeters.size()-shellIx : shellIx-1 );
 
                     double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
-                    if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0)) {
-                        continue;
-                    }
-
-                    if(preferences.get("shiftLayerStartToMaximumConcaveAngle", "on").equals("on")) { // && !bFirstShellTuned) {
-                        if (previousPerimeter == null)
-                            bFirstShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter));
-                        else {
-                            GCodeCommand lastMove = getLastXYTravelMove(previousPerimeter.gCodesTravel);
-                            if(bFirstShellShifted && lastMove != null)
-                                shiftPerimeter(perimeter, findIndexOfClosestPointTo(perimeter, lastMove.getState().getXY()));
-                        }
-
-                        // test angle again
-                        angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
-                        if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
-                            continue;
-                    }
+                    if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
+                        bTune = false;
 
                     GCodeCommand xyTravelMove = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
                     GCodeCommand zTravelMove = GCodeToolkit.getOnlyZTravelMove(perimeter.gCodesTravel);
 
-                    if(shellIx == 1) {
+                    if (shellIx == 1) { // outer shell
+                        if(preferences.get("hideOuterPerimeterStartPointInCavity", "on").equals("on"))
+                            bFirstShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter));
+
                         if(preferences.get("preventLayerChangeOnOuterPerimeter", "on").equals("on") && (zTravelMove != null) && (zTravelMove.getState().getOriginalLineNumber() > xyTravelMove.getState().getOriginalLineNumber())) {
                             GCodeCommand tmp = new GCodeCommand(xyTravelMove);
                             xyTravelMove.set(zTravelMove);
                             zTravelMove.set(tmp);
                         }
 
-                        List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStartOuter, setPointsEndOuter);
-
-                        xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
-
-                        newGCodes.remove(0);
-
-                        if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
-                            ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
-
-                        perimeter.gCodesLoop = newGCodes;
-
-                        bFirstShellTuned = true;
+                        if(bFirstShellShifted) {
+                            angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                            if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
+                                bTune = false;
+                        }
                     }
-                    else if(shellIx == 2) {
-                        List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStart2ndOuter, setPointsEnd2ndOuter);
-
-                        xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
-
-                        newGCodes.remove(0);
-
-                        if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
-                            ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
-
-                        perimeter.gCodesLoop = newGCodes;
+                    else {
+                        if(previousPerimeter != null && preferences.get("alignInnerPerimeterStartPointsToOuterPerimeterStartPoint", "on").equals("on")) {
+                            GCodeCommand lastMove = getLastXYTravelMove(previousPerimeter.gCodesTravel);
+                            if (lastMove != null)
+                                shiftPerimeter(perimeter, findIndexOfClosestPointTo(perimeter, lastMove.getState().getXY()));
+                        } 
                     }
+                    
+                    //                                    
+                    //          actual tuning             
+                    //                                    
+                    
+                    if(bTune) {
+                        if (shellIx == 1) {
+                            List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStartOuter, setPointsEndOuter);
 
+                            xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
+
+                            newGCodes.remove(0);
+
+                            if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
+                                ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
+
+                            perimeter.gCodesLoop = newGCodes;
+                        } else if (shellIx == 2) {
+                            List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStart2ndOuter, setPointsEnd2ndOuter);
+
+                            xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
+
+                            newGCodes.remove(0);
+
+                            if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
+                                ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
+
+                            perimeter.gCodesLoop = newGCodes;
+                        }
+                    }
+                    
                     previousPerimeter = perimeter;
                 }
             }
-            //if (gCode instanceof GCodePerimeter) {
-            //   
-            //}
+            else if (gCode instanceof GCodePerimeter) {
+                GCodePerimeter perimeter = (GCodePerimeter) gCode;
+
+                double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
+                    bTune = false;
+
+                GCodeCommand xyTravelMove = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
+                GCodeCommand zTravelMove = GCodeToolkit.getOnlyZTravelMove(perimeter.gCodesTravel);
+
+                if(preferences.get("hideOuterPerimeterStartPointInCavity", "on").equals("on"))
+                    bFirstShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter));
+
+                if(preferences.get("preventLayerChangeOnOuterPerimeter", "on").equals("on") && (zTravelMove != null) && (zTravelMove.getState().getOriginalLineNumber() > xyTravelMove.getState().getOriginalLineNumber())) {
+                    GCodeCommand tmp = new GCodeCommand(xyTravelMove);
+                    xyTravelMove.set(zTravelMove);
+                    zTravelMove.set(tmp);
+                }
+
+                if(bFirstShellShifted) {
+                    angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                    if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
+                        bTune = false;
+                }
+
+              if(bTune) {
+                    List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStartOuter, setPointsEndOuter);
+
+                    xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
+
+                    newGCodes.remove(0);
+
+                    if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
+                        ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
+
+                    perimeter.gCodesLoop = newGCodes;
+              }
+            }
         }
     }
 

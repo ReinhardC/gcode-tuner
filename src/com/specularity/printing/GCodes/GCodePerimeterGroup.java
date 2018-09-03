@@ -23,7 +23,7 @@ public class GCodePerimeterGroup  extends GCode {
     public void serialize(PrintWriter file) throws IOException {
         for (GCode gCode : perimeters) gCode.serialize(file);
     }
-    
+
     public void updateBbx() {
         bbxMinX = 10000;
         bbxMaxX = -10000;
@@ -42,11 +42,16 @@ public class GCodePerimeterGroup  extends GCode {
     public double getBbxArea() {
         return Math.sqrt((bbxMaxX-bbxMinX)*(bbxMaxX-bbxMinX) + (bbxMaxY-bbxMinY)*(bbxMaxY-bbxMinY));
     }
-    
+
     public boolean isInnerPerimeter() {
+        if(perimeters.size() < 2)
+            return false;
+
         List<GCode> peri0 = perimeters.get(0).gCodesLoop;
         List<GCode> peri1 = perimeters.get(1).gCodesLoop;
+        int peri0last = peri0.size() - 1;
+        int peri1last = peri1.size() - 1;
 
-        return getSignedTravelAngle(peri0.get(0).getState().getXY(), peri1.get(0).getState().getXY(), peri1.get(1).getState().getXY()) > 0.0;
+        return getSignedTravelAngle(peri0.get(peri0last).getState().getXY(), peri1.get(peri1last).getState().getXY(), peri1.get(0).getState().getXY()) > 0.0;
     }
 }

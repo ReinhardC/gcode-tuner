@@ -12,9 +12,7 @@ import java.util.stream.Collectors;
 
 import static com.specularity.printing.VectorTools.*;
 import static com.specularity.printing.tuner.log;
-import static com.specularity.printing.tuner.logArea;
 import static com.specularity.printing.tuner.preferences;
-import static jdk.nashorn.internal.runtime.regexp.joni.Config.log;
 
 public class GCodeToolkit {
 
@@ -123,7 +121,7 @@ public class GCodeToolkit {
 
         GCodeCommand lastXYTravelMove = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
         if(setPointsStart.get(0).getZoffset() != 0)
-            lastXYTravelMove.put('Z', firstGCode.getState().getToolheadPosition().getZ() + setPointsStart.get(0).getZoffset());
+            lastXYTravelMove.put('Z', firstGCode.getState().getXYZ().getZ() + setPointsStart.get(0).getZoffset());
 
         double perimeterExtrudeFactor = GCodeToolkit.getExtrudeFactor(gCodesInput);
 
@@ -188,7 +186,7 @@ public class GCodeToolkit {
                 newMove.putVector2d(move);
                 newMove.put('F', newMove.getState().getFeedrate() * (setPointsStart.get(i+1).getFeedratePct() / 100.));
                 if(zModStart)
-                    newMove.put('Z', newMove.getState().getToolheadPosition().getZ() + setPointsStart.get(i+1).getZoffset());
+                    newMove.put('Z', newMove.getState().getXYZ().getZ() + setPointsStart.get(i+1).getZoffset());
 
                 if(previousMove != null) {
                     previousMove.sub(move);
@@ -262,7 +260,7 @@ public class GCodeToolkit {
                 newMove.putVector2d(move);
                 newMove.put('F', newMove.getState().getFeedrate() * (setPointsEnd.get(i+1).getFeedratePct() / 100.));
                 if(zModEnd)
-                    newMove.put('Z', newMove.getState().getToolheadPosition().getZ() + setPointsEnd.get(i+1).getZoffset());
+                    newMove.put('Z', newMove.getState().getXYZ().getZ() + setPointsEnd.get(i+1).getZoffset());
 
                 if(previousMove != null) {
                     previousMove.sub(move);
@@ -309,7 +307,7 @@ public class GCodeToolkit {
     }
 
     public static double getZHeight(List<GCode> gCodes) {
-        return gCodes.get(0).getState().getToolheadPosition().z;
+        return gCodes.get(0).getState().getXYZ().z;
     }
 
     static GCodeCommand getLastXYTravelMove(List<GCode> gCodesTravel) {
@@ -323,6 +321,9 @@ public class GCodeToolkit {
 
         Object[] zTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X') && !((GCodeCommand) gCode1).has('Y')).toArray();
 
+        if( zTravelMoves.length != 1 )
+            log("Error: Mutiple Z changes in travel moves found. Do expect unexpected behavior.");
+        
         return zTravelMoves.length != 1 ? null : ((GCodeCommand)zTravelMoves[zTravelMoves.length-1]);
     }
 
