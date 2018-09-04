@@ -65,6 +65,9 @@ public class GCodeToolkit {
     }
     
     public static boolean shiftPerimeter(GCodePerimeter perimeter, int shiftIx) {
+        if(shiftIx == -1)
+            return false;
+        
         List<Vector2d> moves2 = perimeter.gCodesLoop.stream()
                 .filter(gCode1 -> gCode1 instanceof GCodeCommand)
                 .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());

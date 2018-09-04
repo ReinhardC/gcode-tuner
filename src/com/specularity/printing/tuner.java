@@ -332,15 +332,7 @@ public class tuner extends Application {
                         continue;
                     }
 
-                    double angle = Math.abs(getTriAngle(
-                            perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(),
-                            perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(),
-                            perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
-                    if (angle > prefMaxAngleBetweenSegments) {
-                        statsIgnoredBecauseAngleTooHigh++;
-                        previousPerimeter = perimeter;
-                        continue;
-                    }
+            
 
                     if (shellIx == 1) { // outer shell
                         if(prefHideOuterPerimeterStartPointInCavity) {
@@ -353,10 +345,18 @@ public class tuner extends Application {
                         }
 
                         if(bShellShifted) {
-                            angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                            double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
                             if (angle > prefMaxAngleBetweenSegments) {
                                 statsIgnoredBecauseAngleAfterShiftingTooHigh++;
-                                previousPerimeter = perimeter;
+                                bTune = false;
+                            }
+                        } else {
+                            double angle = Math.abs(getTriAngle(
+                                    perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(),
+                                    perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(),
+                                    perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                            if (angle > prefMaxAngleBetweenSegments) {
+                                statsIgnoredBecauseAngleTooHigh++;
                                 bTune = false;
                             }
                         }
@@ -453,15 +453,6 @@ public class tuner extends Application {
                     continue;
                 }
 
-                double angle = Math.abs(getTriAngle(
-                        perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(),
-                        perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(),
-                        perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
-                if (angle > prefMaxAngleBetweenSegments) {
-                    statsIgnoredBecauseAngleTooHigh++;
-                    continue;
-                }
-
                 if(prefHideOuterPerimeterStartPointInCavity) {
                     bShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter, prefMaxAngleBetweenSegments));
 
@@ -472,9 +463,18 @@ public class tuner extends Application {
                 }
 
                 if(bShellShifted) {
-                    angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                    double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
                     if (angle > prefMaxAngleBetweenSegments) {
                         statsIgnoredBecauseAngleAfterShiftingTooHigh++;
+                        bTune = false;
+                    }
+                } else {
+                    double angle = Math.abs(getTriAngle(
+                            perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(),
+                            perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(),
+                            perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                    if (angle > prefMaxAngleBetweenSegments) {
+                        statsIgnoredBecauseAngleTooHigh++;
                         bTune = false;
                     }
                 }
