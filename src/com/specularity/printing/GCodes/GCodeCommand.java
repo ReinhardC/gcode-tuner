@@ -3,14 +3,12 @@ package com.specularity.printing.GCodes;
 import com.specularity.printing.MachineState;
 
 import javax.vecmath.Vector2d;
-import javax.vecmath.Vector3d;
 import java.io.PrintWriter;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 
 public class GCodeCommand extends GCode {
     private static DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.ENGLISH);

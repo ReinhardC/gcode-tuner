@@ -16,27 +16,11 @@ import static com.specularity.printing.tuner.preferences;
 
 public class GCodeToolkit {
 
-    public boolean testPerimeterWillBeShifted(GCodePerimeter perimeter) {
-        List<Vector2d> moves = perimeter.gCodesLoop.stream()
-                .filter(gCode1 -> gCode1 instanceof GCodeCommand)
-                .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());
-
-        int minIx = 0;
-        double minAngle = 360.;
-        for (int i = 0; i < moves.size(); i++) {
-            int previ = i != 0 ? i - 1 : moves.size() - 1;
-            int nexti = i != moves.size() - 1 ? i + 1 : 0;
-            double a = getSignedTravelAngle(moves.get(previ), moves.get(i), moves.get(nexti));
-            if (a < minAngle) {
-                minAngle = a;
-                minIx = i;
-            }
-        }
-
-        return (-minAngle >= preferences.getDouble("maxAngleBetweenSegments", 25.0));
-    }
 
     public static int findIndexOfClosestPointTo(GCodePerimeter perimeter, Vector2d p) {
+        if(p==null)
+            return -1;
+        
         List<Vector2d> moves = perimeter.gCodesLoop.stream()
                 .filter(gCode1 -> gCode1 instanceof GCodeCommand)
                 .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());
@@ -56,7 +40,7 @@ public class GCodeToolkit {
         return minIx;
     }
      
-    public static int findIndexOfMostConcaveAngle(GCodePerimeter perimeter) {
+    public static int findIndexOfMostConcaveAngle(GCodePerimeter perimeter, double maxAllowedAngle) {
         List<Vector2d> moves = perimeter.gCodesLoop.stream()
                 .filter(gCode1 -> gCode1 instanceof GCodeCommand)
                 .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());
@@ -73,7 +57,7 @@ public class GCodeToolkit {
             }
         }
 
-        if (-minAngle < preferences.getDouble("maxAngleBetweenSegments", 25.0)) { 
+        if (-minAngle < maxAllowedAngle) { 
             return -1;
         }
         
@@ -81,10 +65,6 @@ public class GCodeToolkit {
     }
     
     public static boolean shiftPerimeter(GCodePerimeter perimeter, int shiftIx) {
-
-        if(shiftIx == -1)
-            return false;
-        
         List<Vector2d> moves2 = perimeter.gCodesLoop.stream()
                 .filter(gCode1 -> gCode1 instanceof GCodeCommand)
                 .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());
@@ -114,6 +94,8 @@ public class GCodeToolkit {
 
     public static List<GCode> tunePerimeter(GCodePerimeter perimeter, ObservableList<SetPoint> setPointsStart, ObservableList<SetPoint> setPointsEnd)
     {
+        double minExtrusionD = preferences.getDouble("minExtrusionDistance", 0.0001);
+        
         List<GCode> gCodesInput = perimeter.gCodesLoop;
         ArrayList<GCode> gCodesOutput = new ArrayList<>();
 
@@ -132,9 +114,6 @@ public class GCodeToolkit {
         // rotate last to first. last was original offset point
         originalMoves.add(0, originalMoves.get(originalMoves.size()-1));
         originalMoves.remove(originalMoves.size()-1);
-
-
-        double minExtrusionD = preferences.getDouble("minExtrusionDistance", 0.0001);
 
         Double totalPathAngle = 0.0;
         Vector2d pathOffset = new Vector2d(0.0, 0.0); // used for rotation

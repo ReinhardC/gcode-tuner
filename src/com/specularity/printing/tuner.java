@@ -8,7 +8,6 @@ import com.specularity.printing.GCodes.GCodePerimeterGroup;
 import com.specularity.printing.ui.EditTab;
 import com.specularity.printing.ui.SettingsTab;
 import javafx.application.Application;
-import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
@@ -22,14 +21,20 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import org.apache.commons.io.FilenameUtils;
 
+import javax.vecmath.Vector2d;
 import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.*;
 import java.util.prefs.Preferences;
+import java.util.stream.Collectors;
 
 import static com.specularity.printing.GCodeToolkit.*;
 import static com.specularity.printing.VectorTools.getTriAngle;
@@ -63,8 +68,10 @@ public class tuner extends Application {
 
         restoreStateFromPreferences();
 
+        patchTooltipBehavior(500,200000,500,true);
+
         Button btnProcessAgain= new Button("Reprocess");
-        
+
         Button btnBrowseGCode = new Button("Process GCode");
         btnBrowseGCode.setOnAction(event -> {
             FileChooser fileChooser = new FileChooser();
@@ -92,10 +99,10 @@ public class tuner extends Application {
                 tune(gCodeFile);
                 log("tuning complete. writing now.");
                 String fileName = gCodeFile.writeCopy();
-                log("tuned file written to " + fileName +".");
+                log("tuned file written to " + fileName +".\nIt is now " + Date.from(Instant.now()));
             }
         });
-        
+
         btnProcessAgain.setDisable(true);
         btnProcessAgain.setOnAction(event -> {
             if(gCodeFile != null) {
@@ -109,7 +116,7 @@ public class tuner extends Application {
                 tune(gCodeFile);
                 log("tuning complete. writing now.");
                 String fileName = gCodeFile.writeCopy();
-                log("tuned file written to " + fileName +".");
+                log("tuned file written to " + fileName +".\nIt is now " + Date.from(Instant.now()));
             }
         });
 
@@ -194,14 +201,15 @@ public class tuner extends Application {
         HBox.setMargin(presetButton, new Insets(12,6,12,0));
         HBox.setMargin(savePresetButton, new Insets(12,6,12,0));
         HBox.setMargin(removePresetButton, new Insets(12,6,12,0));
-
         BorderPane logPane = new BorderPane();
+        
         logPane.setCenter(logArea);
         logArea.setEditable(false);
-        logArea.setFocusTraversable(true);
+        logArea.setWrapText(false);
         logArea.setFont(new Font("Courier New", 11));
-        logPane.setMaxHeight(120.0);
-
+        logPane.setMinHeight(320.0);
+        logPane.setMaxHeight(320.0);
+        
         Label logPaneLabel = new Label("Log output");
         logPaneLabel.setPadding(new Insets(6,4,4, 4));
         logPaneLabel.setFont(labelFont);
@@ -234,7 +242,7 @@ public class tuner extends Application {
                 tune(gCodeFile);
                 log("tuning complete. writing now.");
                 String fileName = gCodeFile.writeCopy();
-                log("tuned file written to " + fileName +".");
+                log("tuned file written to " + fileName +".\nIt is now " + Date.from(Instant.now()));
                 success = true;
             }
             event.setDropCompleted(success);
@@ -242,127 +250,242 @@ public class tuner extends Application {
         });
 
         // Top level container for all view content
-        Scene scene = new Scene(root, 600, 800);
+        Scene scene = new Scene(root, 600, 920);
 
         // primaryStage is the main top level window created by platform
         primaryStage.setTitle(applicationTitle);
         primaryStage.setScene(scene);
+
+        scene.getStylesheets().add
+                (tuner.class.getResource("tuner.css").toExternalForm());
+        
         primaryStage.show();
     }
 
     static public void log(String text)
     {
-       logArea.appendText(text+"\n");
-       logArea.setWrapText(true);
-       logArea.setScrollTop(Double.MAX_VALUE);
+        logArea.requestFocus();
+        logArea.appendText(text+"\n");
+        logArea.setScrollTop(Double.MAX_VALUE);
     }
-    
+
     void tune(GCodeFile file) {
+
+        int statsIgnoredBecauseTooShort = 0;
+        int statsIgnoredBecauseAngleTooHigh = 0;
+        int statsIgnoredBecauseAngleAfterShiftingTooHigh = 0;
+        int statsIgnoredBecauseZTooLow = 0;
+        int statsCouldNotBeShiftedBecauseNoSuitableCavityFound = 0;
+        int statsShiftedToSuitableCavity = 0;
+        int statsShiftedToOuterPerimeter = 0;
+        int statsOuterPerimetersTweaked = 0;
+        int statsInnerPerimetersTweaked = 0;
+        int statsSinglePerimetersIgnored = 0;
+        int statsSinglePerimetersTweaked = 0;
+        int statsIgnoredBecauseNoTravelXYMoves = 0;
+        int statsXYandZswapped = 0;
+
+        boolean prefAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint = preferences.get("alignInnerPerimeterStartPointsToOuterPerimeterStartPoint", "on").equals("on");
+        double prefMaxAngleBetweenSegments = preferences.getDouble("maxAngleBetweenSegments", 25.0);
+        boolean prefPreventLayerChangeOnOuterPerimeter = preferences.get("preventLayerChangeOnOuterPerimeter", "on").equals("on");
+        boolean prefHideOuterPerimeterStartPointInCavity = preferences.get("hideOuterPerimeterStartPointInCavity", "on").equals("on");
+        boolean prefOnlyIfCavityFound = preferences.get("onlyIfCavityFound", "off").equals("on");
+        double prefMinPerimeterLength = preferences.getDouble("minPerimeterLength", 4.0);
+        boolean prefIgnoreSinglePerimeters = preferences.get("ignoreSinglePerimeters", "off").equals("on");
+        double prefMinZ = preferences.getDouble("minZ", 1.0);
+        
         for (GCode gCode : file.gCodes) {
 
             boolean bTune = true;
-            boolean bFirstShellShifted = false;
-            
+            boolean bShellShifted = false;
+
             if (gCode instanceof GCodePerimeterGroup) {
                 GCodePerimeterGroup group = (GCodePerimeterGroup) gCode;
                 GCodePerimeter previousPerimeter = null;
+                Vector2d newAttachmentPosition = null;
 
                 boolean bInner = group.isInnerPerimeter();
 
                 for(int shellIx=1; shellIx <= group.perimeters.size(); shellIx++) {
 
                     GCodePerimeter perimeter = (GCodePerimeter) group.perimeters.get(bInner ? group.perimeters.size()-shellIx : shellIx-1 );
-
-                    double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
-                    if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
-                        bTune = false;
-
                     GCodeCommand xyTravelMove = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
                     GCodeCommand zTravelMove = GCodeToolkit.getOnlyZTravelMove(perimeter.gCodesTravel);
 
+                    if(xyTravelMove == null){
+                        statsIgnoredBecauseNoTravelXYMoves++;
+                        previousPerimeter = perimeter;
+                        continue;
+                    }
+
+                    if(prefPreventLayerChangeOnOuterPerimeter && (zTravelMove != null) && (zTravelMove.getState().getOriginalLineNumber() > xyTravelMove.getState().getOriginalLineNumber())) {
+                        // swap XY and Z moves
+                        GCodeCommand tmp = new GCodeCommand(xyTravelMove);
+                        xyTravelMove.set(zTravelMove);
+                        zTravelMove.set(tmp);
+                        statsXYandZswapped++;
+                    }
+
+                    if(perimeter.getLength() < prefMinPerimeterLength) {
+                        statsIgnoredBecauseTooShort++;
+                        previousPerimeter = perimeter;
+                        continue;
+                    }
+
+                    double angle = Math.abs(getTriAngle(
+                            perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(),
+                            perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(),
+                            perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                    if (angle > prefMaxAngleBetweenSegments) {
+                        statsIgnoredBecauseAngleTooHigh++;
+                        previousPerimeter = perimeter;
+                        continue;
+                    }
+
                     if (shellIx == 1) { // outer shell
-                        if(preferences.get("hideOuterPerimeterStartPointInCavity", "on").equals("on"))
-                            bFirstShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter));
+                        if(prefHideOuterPerimeterStartPointInCavity) {
+                            bShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter, prefMaxAngleBetweenSegments));
 
-                        if(preferences.get("preventLayerChangeOnOuterPerimeter", "on").equals("on") && (zTravelMove != null) && (zTravelMove.getState().getOriginalLineNumber() > xyTravelMove.getState().getOriginalLineNumber())) {
-                            GCodeCommand tmp = new GCodeCommand(xyTravelMove);
-                            xyTravelMove.set(zTravelMove);
-                            zTravelMove.set(tmp);
+                            if(!bShellShifted)
+                                statsCouldNotBeShiftedBecauseNoSuitableCavityFound++;
+                            else
+                                statsShiftedToSuitableCavity++;
                         }
 
-                        if(bFirstShellShifted) {
+                        if(bShellShifted) {
                             angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
-                            if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
+                            if (angle > prefMaxAngleBetweenSegments) {
+                                statsIgnoredBecauseAngleAfterShiftingTooHigh++;
+                                previousPerimeter = perimeter;
                                 bTune = false;
+                            }
                         }
                     }
-                    else {
-                        if(previousPerimeter != null && preferences.get("alignInnerPerimeterStartPointsToOuterPerimeterStartPoint", "on").equals("on")) {
+                    else { /* if(shellIx == 1) */
+                        if(previousPerimeter != null && prefAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint) {
                             GCodeCommand lastMove = getLastXYTravelMove(previousPerimeter.gCodesTravel);
-                            if (lastMove != null)
-                                shiftPerimeter(perimeter, findIndexOfClosestPointTo(perimeter, lastMove.getState().getXY()));
-                        } 
+                            if (lastMove != null && newAttachmentPosition != null) {
+                                shiftPerimeter(perimeter, findIndexOfClosestPointTo(perimeter, newAttachmentPosition));
+                                statsShiftedToOuterPerimeter++;
+                            }
+                        }
                     }
+
+                    if(perimeter.getState().getZ() < prefMinZ) {
+                        statsIgnoredBecauseZTooLow++;
+                        bTune = false;
+                    }
+                    
+                    if(xyTravelMove != null && (bShellShifted || prefOnlyIfCavityFound))
+                        newAttachmentPosition = xyTravelMove.getState().getXY();
+
+                    previousPerimeter = perimeter;
                     
                     //                                    
                     //          actual tuning             
                     //                                    
-                    
+
                     if(bTune) {
+                        
                         if (shellIx == 1) {
+                            
                             List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStartOuter, setPointsEndOuter);
 
                             xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
 
                             newGCodes.remove(0);
 
-                            if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
+                            if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F')) {
                                 ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
+                            }
 
                             perimeter.gCodesLoop = newGCodes;
-                        } else if (shellIx == 2) {
+                            statsOuterPerimetersTweaked++;
+                        } 
+                        else if (shellIx == 2) {
+                            
                             List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStart2ndOuter, setPointsEnd2ndOuter);
 
                             xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
 
                             newGCodes.remove(0);
 
-                            if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F'))
+                            if (!((GCodeCommand) newGCodes.get(0)).has('F') && ((GCodeCommand) perimeter.gCodesLoop.get(0)).has('F')) {
                                 ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
+                            }
 
                             perimeter.gCodesLoop = newGCodes;
+                            statsInnerPerimetersTweaked++;
                         }
                     }
-                    
-                    previousPerimeter = perimeter;
                 }
             }
             else if (gCode instanceof GCodePerimeter) {
+
+                if (prefIgnoreSinglePerimeters) {
+                    statsSinglePerimetersIgnored++;
+                    continue;
+                }
+
                 GCodePerimeter perimeter = (GCodePerimeter) gCode;
-
-                double angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
-                if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
-                    bTune = false;
-
                 GCodeCommand xyTravelMove = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
                 GCodeCommand zTravelMove = GCodeToolkit.getOnlyZTravelMove(perimeter.gCodesTravel);
 
-                if(preferences.get("hideOuterPerimeterStartPointInCavity", "on").equals("on"))
-                    bFirstShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter));
-
-                if(preferences.get("preventLayerChangeOnOuterPerimeter", "on").equals("on") && (zTravelMove != null) && (zTravelMove.getState().getOriginalLineNumber() > xyTravelMove.getState().getOriginalLineNumber())) {
+                if(xyTravelMove == null){
+                    statsIgnoredBecauseNoTravelXYMoves++;
+                    continue;
+                }
+                
+                if(prefPreventLayerChangeOnOuterPerimeter && (zTravelMove != null) && (zTravelMove.getState().getOriginalLineNumber() > xyTravelMove.getState().getOriginalLineNumber())) {
+                    // swap XY and Z moves
                     GCodeCommand tmp = new GCodeCommand(xyTravelMove);
                     xyTravelMove.set(zTravelMove);
                     zTravelMove.set(tmp);
+                    statsXYandZswapped++;
                 }
 
-                if(bFirstShellShifted) {
+                List<Vector2d> pathPoints = perimeter.gCodesLoop.stream()
+                        .filter(gCode1 -> gCode1 instanceof GCodeCommand)
+                        .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());
+
+                if(perimeter.getLength() < prefMinPerimeterLength) {
+                    statsIgnoredBecauseTooShort++;
+                    continue;
+                }
+
+                double angle = Math.abs(getTriAngle(
+                        perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(),
+                        perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(),
+                        perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
+                if (angle > prefMaxAngleBetweenSegments) {
+                    statsIgnoredBecauseAngleTooHigh++;
+                    continue;
+                }
+
+                if(prefHideOuterPerimeterStartPointInCavity) {
+                    bShellShifted = shiftPerimeter(perimeter, findIndexOfMostConcaveAngle(perimeter, prefMaxAngleBetweenSegments));
+
+                    if(!bShellShifted)
+                        statsCouldNotBeShiftedBecauseNoSuitableCavityFound++;
+                    else
+                        statsShiftedToSuitableCavity++;
+                }
+
+                if(bShellShifted) {
                     angle = Math.abs(getTriAngle(perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 1).getState().getXY(), perimeter.gCodesLoop.get(perimeter.gCodesLoop.size() - 2).getState().getXY(), perimeter.gCodesLoop.get(0).getState().getXY()) - 180.);
-                    if (angle > preferences.getDouble("maxAngleBetweenSegments", 25.0))
+                    if (angle > prefMaxAngleBetweenSegments) {
+                        statsIgnoredBecauseAngleAfterShiftingTooHigh++;
                         bTune = false;
+                    }
                 }
 
-              if(bTune) {
+                if(perimeter.getState().getZ() < prefMinZ) {
+                    statsIgnoredBecauseZTooLow++;
+                    bTune = false;
+                }
+                
+                if(bTune) {
+                    
                     List<GCode> newGCodes = tunePerimeter(perimeter, setPointsStartOuter, setPointsEndOuter);
 
                     xyTravelMove.putVector2d(newGCodes.get(0).getState().getXY());
@@ -373,9 +496,25 @@ public class tuner extends Application {
                         ((GCodeCommand) newGCodes.get(0)).put('F', ((GCodeCommand) perimeter.gCodesLoop.get(0)).get('F'));
 
                     perimeter.gCodesLoop = newGCodes;
-              }
+                    statsSinglePerimetersTweaked++;
+                }
             }
         }
+
+        log("=====================================\nlast tune results:");
+        log( statsOuterPerimetersTweaked + " outer perimeters have been tweaked");
+        log(statsInnerPerimetersTweaked + " inner perimeters have been tweaked");
+        log(statsSinglePerimetersIgnored + " single perimeters were ignored due to a setting");
+        log(statsSinglePerimetersTweaked + " single perimeters have been tweaked");
+        log(statsXYandZswapped + " layer change points have been moved off the outer perimeter");
+        log(statsIgnoredBecauseTooShort + " perimeters have not been tweaked because they are too short");
+        log(statsIgnoredBecauseZTooLow + " perimeter have not been tweaked because their Z value was too low");
+        log( statsIgnoredBecauseAngleTooHigh + " perimeters could be ignored because the start point angle was high enough");
+        log(statsShiftedToSuitableCavity + " perimeters were shifted to hide the seam in a cavity");
+        log(statsCouldNotBeShiftedBecauseNoSuitableCavityFound + " perimeters could not be shifted to hide the seam in a cavity");
+        log( statsIgnoredBecauseAngleAfterShiftingTooHigh + " perimeters could be ignored because the start point angle after the shifting was high enough");
+        log(statsShiftedToOuterPerimeter + " inner perimeters were shifted to align with the outer perimeter");
+        log(statsIgnoredBecauseNoTravelXYMoves + " perimeter have not been tweaked because no XY travel moves have been found");
     }
 
     private void restoreFromString(ObservableList<SetPoint> setPoints, String string) {
@@ -391,6 +530,41 @@ public class tuner extends Application {
         restoreFromString(setPointsEndOuter, preferences.get("setPointsEndOuter", emptyTableJson));
         restoreFromString(setPointsStart2ndOuter, preferences.get("setPointsStart2ndOuter", emptyTableJson));
         restoreFromString(setPointsEnd2ndOuter, preferences.get("setPointsEnd2ndOuter", emptyTableJson));
+    }
+
+    /**
+     * Hack allowing to modify the default behavior of the tooltips.
+     *
+     * @param openDelay       The open delay, knowing that by default it is set to 1000.
+     * @param visibleDuration The visible duration, knowing that by default it is set to 5000.
+     * @param closeDelay      The close delay, knowing that by default it is set to 200.
+     * @param hideOnExit      Indicates whether the tooltip should be hide on exit,
+     *                        knowing that by default it is set to false.
+     */
+    private static void patchTooltipBehavior(long openDelay, long visibleDuration, long closeDelay, boolean hideOnExit) {
+        try {
+            // Get the non public field "BEHAVIOR"
+            Field fieldBehavior = Tooltip.class.getDeclaredField("BEHAVIOR");
+            // Make the field accessible to be able to get and set its value
+            fieldBehavior.setAccessible(true);
+            // Get the value of the static field
+            Object objBehavior = fieldBehavior.get(null);
+            // Get the constructor of the private static inner class TooltipBehavior
+            Constructor<?> constructor = objBehavior.getClass().getDeclaredConstructor(
+                    Duration.class, Duration.class, Duration.class, boolean.class
+            );
+            // Make the constructor accessible to be able to invoke it
+            constructor.setAccessible(true);
+            // Create a new instance of the private static inner class TooltipBehavior
+            Object tooltipBehavior = constructor.newInstance(
+                    new Duration(openDelay), new Duration(visibleDuration),
+                    new Duration(closeDelay), hideOnExit
+            );
+            // Set the new instance of TooltipBehavior
+            fieldBehavior.set(null, tooltipBehavior);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     public static void main(String[] args) {

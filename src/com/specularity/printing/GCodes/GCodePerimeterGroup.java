@@ -16,9 +16,6 @@ public class GCodePerimeterGroup  extends GCode {
         perimeters.add(perimeter);
     }
 
-    public GCodePerimeterGroup() {
-    }
-
     @Override
     public void serialize(PrintWriter file) throws IOException {
         for (GCode gCode : perimeters) gCode.serialize(file);

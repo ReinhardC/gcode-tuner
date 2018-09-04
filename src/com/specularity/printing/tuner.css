@@ -1,0 +1,26 @@
+
+.label {
+     -fx-font: 12px Courier;
+ }
+
+.bordered-titled-title {
+    -fx-background-color: #f0f0f0;
+    -fx-translate-y: -11;
+    -fx-translate-x: 16;
+}
+
+.bordered-titled-border {
+    -fx-content-display: top;
+    -fx-border-insets: 24 12 12 12;
+    -fx-border-color: #a9a9a9;
+    -fx-border-width: 1;
+    -fx-border-radius: 4px;
+}
+
+.bordered-titled-content {
+    -fx-padding: 8 5 8 5;
+}
+
+.table-view .table-cell {
+    -fx-font: bold 12px 'courier new';
+}

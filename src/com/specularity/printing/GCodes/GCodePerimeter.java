@@ -1,11 +1,13 @@
 package com.specularity.printing.GCodes;
 
+import javax.vecmath.Vector2d;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
-import static com.specularity.printing.VectorTools.getSignedTravelAngle;
+import static com.specularity.printing.VectorTools.getCycleLength;
 
 public class GCodePerimeter extends GCode {
     public List<GCode> gCodesTravel = new ArrayList<>();
@@ -49,5 +51,13 @@ public class GCodePerimeter extends GCode {
 
     public double getBbxArea() {
         return Math.sqrt((bbxMaxX-bbxMinX)*(bbxMaxX-bbxMinX) + (bbxMaxY-bbxMinY)*(bbxMaxY-bbxMinY));
+    }
+
+    public double getLength() {
+        List<Vector2d> pathPoints = gCodesLoop.stream()
+                .filter(gCode1 -> gCode1 instanceof GCodeCommand)
+                .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());
+
+        return getCycleLength(pathPoints);
     }
 }

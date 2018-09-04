@@ -4,12 +4,10 @@ import javafx.util.Pair;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.StringTokenizer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static com.specularity.printing.tuner.log;
-import static com.specularity.printing.tuner.logArea;
 
 public class GCodeFactory {
 

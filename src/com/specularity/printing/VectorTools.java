@@ -1,17 +1,8 @@
 package com.specularity.printing;
 
-import com.specularity.printing.GCodes.GCode;
-import com.specularity.printing.GCodes.GCodeCommand;
-import com.specularity.printing.GCodes.GCodePerimeter;
-import javafx.collections.ObservableList;
-
 import javax.vecmath.Vector2d;
 import javax.vecmath.Vector3d;
 import java.util.*;
-import java.util.stream.Collectors;
-
-import static com.specularity.printing.tuner.logArea;
-import static com.specularity.printing.tuner.preferences;
 
 public class VectorTools {
 
