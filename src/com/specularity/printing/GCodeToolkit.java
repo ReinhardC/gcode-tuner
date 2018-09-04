@@ -321,8 +321,8 @@ public class GCodeToolkit {
 
         Object[] zTravelMoves = gCodesTravel.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand && ((GCodeCommand) gCode1).has('Z') && !((GCodeCommand) gCode1).has('X') && !((GCodeCommand) gCode1).has('Y')).toArray();
 
-        if( zTravelMoves.length != 1 )
-            log("Error: Mutiple Z changes in travel moves found. Do expect unexpected behavior.");
+        // if( zTravelMoves.length != 1 )
+        //    log("Error: Mutiple Z changes in travel moves found. Do expect unexpected behavior.");
         
         return zTravelMoves.length != 1 ? null : ((GCodeCommand)zTravelMoves[zTravelMoves.length-1]);
     }

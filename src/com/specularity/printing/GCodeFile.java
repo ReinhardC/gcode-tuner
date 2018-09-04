@@ -96,7 +96,7 @@ class GCodeFile {
                 gCodesTmp.add(gcode);
             }
             else {
-                int firstPerimeterPtIx = findPositionInGCodes(gCodesTmp, currentToolheadPosition, 0.001);
+                int firstPerimeterPtIx = findPositionInGCodes(gCodesTmp, currentToolheadPosition, 0.003);
                 
                 gCodesTmp.add(gcode);
 
@@ -140,6 +140,7 @@ class GCodeFile {
                             gCodes.add(currentPerimeterGroup.perimeters.get(0));
 
                         currentPerimeterGroup = null;
+                        previousPerimeter = null;
                     }
 
                     // unknown trailing commands (infill, support...) that are not travel moves
