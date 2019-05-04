@@ -128,7 +128,10 @@ class GCodeFile {
                         endTravelMovesIx++;
 
                     GCodePerimeter perimeter = new GCodePerimeter();
-                    
+
+                    if (currentPerimeterGroup == null)
+                        currentPerimeterGroup = new GCodePerimeterGroup(perimeter);
+
                     // flush group in case extra moves were found
                     if(beginTravelMovesIx > 0 && currentPerimeterGroup.perimeters.size() > 0) {
                         if (currentPerimeterGroup.perimeters.size() != 1) {
@@ -164,10 +167,7 @@ class GCodeFile {
                         }
 
                     perimeter.updateBbx();
-
-                    if (currentPerimeterGroup == null)
-                        currentPerimeterGroup = new GCodePerimeterGroup(perimeter);
-
+                        
                     boolean bKeepCollecting = false;
 
                     if (previousPerimeter == null)

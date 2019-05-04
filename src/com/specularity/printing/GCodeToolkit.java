@@ -2,6 +2,7 @@ package com.specularity.printing;
 
 import com.specularity.printing.GCodes.GCode;
 import com.specularity.printing.GCodes.GCodeCommand;
+import com.specularity.printing.GCodes.GCodeComment;
 import com.specularity.printing.GCodes.GCodePerimeter;
 import javafx.collections.ObservableList;
 
@@ -72,10 +73,16 @@ public class GCodeToolkit {
                 .filter(gCode1 -> gCode1 instanceof GCodeCommand)
                 .map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList());
 
+        Vector2d from = new Vector2d(moves2.get(0));
+        
         List<Vector2d> moves = new ArrayList<>();
         moves.addAll(moves2.subList(shiftIx+1, moves2.size()));
         moves.addAll(moves2.subList(0, shiftIx+1));
 
+        Vector2d delta = new Vector2d(moves.get(0));
+        delta.sub(from);
+        double movedBy = delta.length();
+        
         if (perimeter.gCodesLoop.size() != moves.size()) {
             log("Error: shift could not be applied to a perimeter because there were non-move commands in the loop part.");
             return false;
@@ -90,6 +97,19 @@ public class GCodeToolkit {
         for (int i = 0; i < perimeter.gCodesLoop.size(); i++)
             ((GCodeCommand) perimeter.gCodesLoop.get(i)).putVector2d(moves.get(i));
 
+        int ix = perimeter.gCodesTravel.indexOf(travelMove);
+
+        //unless already retracting
+        GCode afterTravelMove = perimeter.gCodesTravel.get(ix + 1);
+
+        if (movedBy > 3 && !(afterTravelMove instanceof GCodeCommand && ((GCodeCommand) afterTravelMove).command.equals("G1") && ((GCodeCommand) afterTravelMove).has('E'))) {
+            perimeter.gCodesTravel.add(ix, new GCodeComment("G1 E-4.6000 F6000 ; needs extra rectraction, was shifted " + movedBy + "mm "));
+            perimeter.gCodesTravel.add(ix, new GCodeComment("G92 E0  ; needs extra rectraction, was shifted " + movedBy + "mm "));
+            perimeter.gCodesTravel.add(ix + 3, new GCodeComment("G1 E0.0 F6000 ; needs extra rectraction, was shifted " + movedBy + "mm "));
+        }
+        else 
+            perimeter.gCodesTravel.add(ix, new GCodeComment("; already retracting , was shifted " + movedBy + "mm "));
+        
         travelMove.putVector2d(moves.get(moves.size()-1));
         
         return true;
