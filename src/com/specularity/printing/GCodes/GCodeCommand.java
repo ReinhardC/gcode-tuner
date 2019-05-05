@@ -14,7 +14,7 @@ public class GCodeCommand extends GCode {
     private static DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.ENGLISH);
     private static DecimalFormat d0 = new DecimalFormat("#0", symbols );
     private static DecimalFormat d3 = new DecimalFormat("#0.000", symbols );
-    private static DecimalFormat d5 = new DecimalFormat("#0.0000", symbols );
+    private static DecimalFormat d5 = new DecimalFormat("#0.00000", symbols );
 
     protected Map<Character, Double> params = new HashMap<>();
     public String command;
@@ -28,16 +28,16 @@ public class GCodeCommand extends GCode {
         this.set(gCodeCommand);
     }
 
-    public double get(char c) {
-        return params.get(c);
+    public double get(char param) {
+        return params.get(param);
     }
 
-    public void put(char c, double v) {
-        params.put(c, v);
+    public void put(char param, double value) {
+        params.put(param, value);
     }
 
-    public boolean has(char c) {
-        boolean contains = params.containsKey(c);
+    public boolean has(char param) {
+        boolean contains = params.containsKey(param);
         return contains;
     }
 
@@ -58,7 +58,7 @@ public class GCodeCommand extends GCode {
                 (params.containsKey('X') ? "X" + d3.format(params.get('X')) + " " : "") +
                 (params.containsKey('Y') ? "Y" + d3.format(params.get('Y')) + " " : "") +
                 (params.containsKey('Z') ? "Z" + d3.format(params.get('Z')) + " " : "") +
-                (params.containsKey('E') ? "E" + d5.format(params.get('E')) + " " : "") +
+                //(params.containsKey('E') ? "E" + d5.format(params.get('E')) + " " : "") +
                 (params.containsKey('F') ? "F" + d0.format(params.get('F')) + " " : "") +
                 (params.containsKey('I') ? "I" + d5.format(params.get('I')) + " " : "") +
                 (params.containsKey('J') ? "J" + d5.format(params.get('J')) + " " : "") +
@@ -67,14 +67,13 @@ public class GCodeCommand extends GCode {
                 (params.containsKey('S') ? "S" + d0.format(params.get('S')) + " " : "") +
                 (params.containsKey('T') ? "T" + d0.format(params.get('T')) + " " : "");
 
+        toString += (params.containsKey('E') ? "E" + d5.format(state.getE()) + " " : "");
+        
         while(toString.charAt(toString.length()-1) == ' ')
             toString = toString.substring(0, toString.length()-1);
 
         if(comment != null && !comment.equals(""))
             toString += " " + comment;
-
-        if(toString.equals("G92 E0.0000"))
-            toString = "G92 E0";
 
         return toString;
     }

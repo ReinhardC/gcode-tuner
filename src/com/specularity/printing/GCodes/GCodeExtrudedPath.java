@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class GCodeExtrudedPath extends GCode {
+    public List<GCode> gCodesTravel = new ArrayList<>();
     public List<GCode> gCodesMoves = new ArrayList<>();
     private double bbxMinX, bbxMaxX, bbxMinY, bbxMaxY;
 

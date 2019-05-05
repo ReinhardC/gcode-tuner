@@ -48,7 +48,7 @@ public class GCodeFactory {
 
             while(pair != null) {
                 Character k = pair.getKey();
-                if("GTM".indexOf(k) != -1) {
+                if("GTM".indexOf(k) != -1 && newCommand == null) { // remove  newCommand == null) { here if multiple commands are allowed in a line
                     newCommand = new GCodeCommand(k + "" + pair.getValue().intValue(), lineComment);
                     newCommands.add(newCommand);
                 }

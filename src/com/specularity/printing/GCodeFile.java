@@ -2,7 +2,6 @@ package com.specularity.printing;
 
 import com.specularity.printing.GCodes.*;
 
-import javax.vecmath.Vector2d;
 import javax.vecmath.Vector3d;
 import java.io.*;
 import java.util.ArrayList;
@@ -39,6 +38,7 @@ class GCodeFile {
         try (BufferedReader fileStream = new BufferedReader(new InputStreamReader(new DataInputStream(new FileInputStream(file))))) {
             String strLine;
             int nbLines = 0;
+            GCode lastGCode = null;
             while ((strLine = fileStream.readLine()) != null) {
                 nbLines++;
                 List<GCode> gcodes = GCodeFactory.gCodesFromLine(strLine, lastMoveCommand);
@@ -46,7 +46,9 @@ class GCodeFile {
                     if (gcode != null) {
                         if (gcode instanceof GCodeCommand) {
                             GCodeCommand cmd = (GCodeCommand) gcode;
-                            if (cmd.command.equals("G0") || cmd.command.equals("G1") || cmd.command.equals("G2") || cmd.command.equals("G3")) {
+                            boolean skip = false;
+                            if (cmd.command.equals("G0") || cmd.command.equals("G1") || cmd.command.equals("G2") || cmd.command.equals("G3")) 
+                            {
                                 lastMoveCommand = cmd.command;
                                 if (cmd.has('X'))
                                     currentState.updateX(cmd.get('X'));
@@ -56,11 +58,66 @@ class GCodeFile {
                                     currentState.updateZ(cmd.get('Z'));
                                 if (cmd.has('F'))
                                     currentState.updateFeedrate(cmd.get('F'));
+                                if (cmd.has('E'))
+                                    currentState.updateE(cmd.get('E'));
+                            } else if(cmd.command.equals("M83")) {
+                                currentState.setIsAbsoluteExtrusion(false);
+                                gcode = new GCodeComment(";M83 removed by GCodeTuner");
+                            }
+                            else if(cmd.command.equals("M82")) {
+                                currentState.setIsAbsoluteExtrusion(true);
+                            }
+                            else if(cmd.command.equals("G92")) {
+                                if (cmd.has('E') && currentState.isAbsoluteExtrusion()) {
+                                    currentState.setZeroE(currentState.getE() - cmd.get('E'));
+                                    currentState.updateE(cmd.get('E'));
+                                }
+                                if (cmd.has('X')) {
+                                    currentState.setZeroX(currentState.getX() - cmd.get('X'));
+                                    currentState.updateX(cmd.get('X'));
+                                }
+                                if (cmd.has('Y')) {
+                                    currentState.setZeroY(currentState.getY() - cmd.get('Y'));
+                                    currentState.updateY(cmd.get('Y'));
+                                }
+                                if (cmd.has('Z')) {
+                                    currentState.setZeroZ(currentState.getZ() - cmd.get('Z'));
+                                    currentState.updateZ(cmd.get('Z'));
+                                }
+                                gcode = new GCodeComment(";G92 removed by GCodeTuner");
                             }
                         }
+
+
                         currentState.setOriginalLineNumber(nbLines);
-                        gcode.setState(new MachineState(currentState));
+
+                        MachineState newMachineState = new MachineState(currentState);
+                        
+                        gcode.setState(newMachineState);
+                        
+                        if(newMachineState.isRetracted())
+                            if(gcode.comment == null)
+                                gcode.comment = "; +retracted";
+                            else
+                                gcode.comment += " +retracted";
+                                
+                        if(gcode instanceof GCodeCommand && lastGCode != null 
+                                && Math.abs(gcode.getState().getE() - lastGCode.getState().getE()) < 0.000005)
+                                    if(gcode.comment == null)
+                                        gcode.comment = "; +travel";
+                                    else
+                                        gcode.comment += " +travel";
+                        
+                        if(gcode instanceof GCodeCommand && lastGCode != null && lastGCode.getState().isRetracted() 
+                                && Math.abs(gcode.getState().getMaxE() - gcode.getState().getE()) < 0.000005)
+                                    if(gcode.comment == null)
+                                        gcode.comment = "; +end retraction";
+                                    else
+                                        gcode.comment += " +end retraction";
+                            
                         gCodes.add(gcode);
+
+                        lastGCode = gcode;
                     }
                     else log("unrecognized GCode: " + strLine);
                 }
@@ -74,7 +131,7 @@ class GCodeFile {
         //              group commands into perimeters, and perimeters into perimeter groups
         //
 
-        List<GCode> oriFileCodes = gCodes;
+     /*   List<GCode> oriFileCodes = gCodes;
         gCodes = new ArrayList<>();
         List<GCode> gCodesTmp = new ArrayList<>();
 
@@ -123,7 +180,7 @@ class GCodeFile {
 
                     int endTravelMovesIx = firstPerimeterPtIx;
                     while (endTravelMovesIx < gCodesTmp.size() &&
-                            gCodesTmp.get(endTravelMovesIx).getState().isValidXY() &&
+                            gCodesTmp.get(endTravelMovesIx).getState().hasXY() &&
                             gCodesTmp.get(endTravelMovesIx).getState().getXY().equals(firstLoopPoint.getState().getXY()))
                         endTravelMovesIx++;
 
@@ -149,7 +206,6 @@ class GCodeFile {
                     // unknown trailing commands (infill, support...) that are not travel moves
                     gCodes.addAll(gCodesTmp.subList(0, beginTravelMovesIx));
                     
-                    
                     //travel moves
                     perimeter.gCodesTravel.addAll(gCodesTmp.subList(beginTravelMovesIx, endTravelMovesIx));
 
@@ -172,7 +228,7 @@ class GCodeFile {
 
                     if (previousPerimeter == null)
                         bKeepCollecting = true;
-                    else if (beginTravelMovesIx == 0 && // no extra commands allowed between grouped perimeters */ 
+                    else if (beginTravelMovesIx == 0 && // no extra commands allowed between grouped perimeters 
                             previousPerimeter.getState().getZ() == perimeter.getState().getZ()) {
                         GCodeCommand lastTravelMoveThis = GCodeToolkit.getLastXYTravelMove(perimeter.gCodesTravel);
                         GCodeCommand lastTravelMovePrevious = GCodeToolkit.getLastXYTravelMove(previousPerimeter.gCodesTravel);
@@ -195,7 +251,7 @@ class GCodeFile {
                             currentPerimeterGroup.updateBbx();
                             gCodes.add(currentPerimeterGroup);
                         } else
-                            gCodes.add(currentPerimeterGroup.perimeters.get(0));
+                            gCodesgCodes.add(currentPerimeterGroup.perimeters.get(0));
 
                         currentPerimeterGroup = new GCodePerimeterGroup(perimeter);
                     }
@@ -208,7 +264,7 @@ class GCodeFile {
 
             lastToolheadPosition.set(currentToolheadPosition);
         }
-        
+        */
         return;
     }
 

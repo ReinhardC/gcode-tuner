@@ -96,7 +96,7 @@ public class tuner extends Application {
                 log(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)");
                 log(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other");
                 log(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesLoop.size()).sum() + " inside groups");
-                tune(gCodeFile);
+                //tune(gCodeFile);
                 log("tuning complete. writing now.");
                 String fileName = gCodeFile.writeCopy();
                 log("tuned file written to " + fileName +".\nIt is now " + Date.from(Instant.now()));
@@ -113,7 +113,7 @@ public class tuner extends Application {
                 log(gCodeFile.getPerimeters().count() + " perimeters (inner and outer)");
                 log(gCodeFile.gCodes.stream().filter(gCode -> !(gCode instanceof GCodePerimeter)).count() + " other");
                 log(gCodeFile.getPerimeters().mapToLong(gCode -> ((GCodePerimeter) gCode).gCodesLoop.size()).sum() + " inside groups");
-                tune(gCodeFile);
+                //tune(gCodeFile);
                 log("tuning complete. writing now.");
                 String fileName = gCodeFile.writeCopy();
                 log("tuned file written to " + fileName +".\nIt is now " + Date.from(Instant.now()));
