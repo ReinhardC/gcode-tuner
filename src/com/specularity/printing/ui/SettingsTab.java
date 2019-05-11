@@ -53,9 +53,6 @@ public class SettingsTab extends Tab {
         VBox btp1content = new VBox(cbPreventLayerChangeOnOuterPerimeter, cbHideOuterPerimeterStartPointInCavity, cbAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint, hbOnlyIfCavityFound);
         BorderedTitledPane btpGeneral = new BorderedTitledPane("General settings", btp1content);
 
-        
-        
-
         TextField txtMinExtrusionDistance = new TextField();
         HBox hbMinDistance = new HBox(new Label("Minimum extrusion distance:\t\t\t"), txtMinExtrusionDistance);
         txtMinExtrusionDistance.setText(df.format(preferences.getDouble("minExtrusionDistance", 0.0001)));
@@ -92,20 +89,26 @@ public class SettingsTab extends Tab {
         ((Label) hbMaxAngle.getChildren().get(0)).setTooltip(txtMaxAngleBetweenSegments.getTooltip());
         hbMaxAngle.setPadding(new Insets(5, 0, 0, 0));
 
+        TextField txtRetractRestartDistance = new TextField();
+        HBox hbRestartDistance = new HBox(new Label("Extrusion restart distance:\t\t\t\t\t\t"), txtRetractRestartDistance);
+        txtRetractRestartDistance.setText(df.format(preferences.getDouble("extrusionRestartDistance", 0.0)));
+        txtRetractRestartDistance.setTooltip(new Tooltip("Remove points from computed paths would extrude less than given amount.\n\nDefault is 0.0001"));
+        txtRetractRestartDistance.textProperty().addListener((v, ov, nv) -> preferences.putDouble("extrusionRestartDistance", Double.valueOf(nv)));
+        ((Label) hbRestartDistance.getChildren().get(0)).setPadding(new Insets(5, 12, 2, 12));
+        ((Label) hbRestartDistance.getChildren().get(0)).setTooltip(txtRetractRestartDistance.getTooltip());
+        hbRestartDistance.setPadding(new Insets(5, 0, 0, 0));
+        
         CheckBox cbIgnoreSinglePerimeters = new CheckBox("Ignore single perimeters");
         cbIgnoreSinglePerimeters.setTooltip(new Tooltip("If checked, only perimeters of 2+ thick walls will be tweaked.\n\nDefault is OFF."));
         cbIgnoreSinglePerimeters.setSelected(preferences.get("ignoreSinglePerimeters", "off").equals("on"));
         cbIgnoreSinglePerimeters.selectedProperty().addListener((v, ov, nv) -> preferences.put("ignoreSinglePerimeters", nv ? "on" : "off"));
         cbIgnoreSinglePerimeters.setPadding(new Insets(12, 12, 5, 12));
 
-        VBox btp2content = new VBox(hbMinPerimeterLen, hbMinZ, hbMaxAngle, cbIgnoreSinglePerimeters);
+        VBox btp2content = new VBox(hbMinPerimeterLen, hbMinZ, hbMaxAngle, hbRestartDistance, cbIgnoreSinglePerimeters);
         BorderedTitledPane btpTweaks = new BorderedTitledPane("Perimeter path start/end tweak settings", btp2content);
-
-        
         
         box.getChildren().addAll(btpGeneral, btpTweaks);
 
-        
         cbAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint.selectedProperty().addListener((observable, oldValue, newValue) -> cbOnlyIfCavityFound.setDisable(!newValue || !cbHideOuterPerimeterStartPointInCavity.isSelected()));
         cbHideOuterPerimeterStartPointInCavity.selectedProperty().addListener((observable, oldValue, newValue) -> cbOnlyIfCavityFound.setDisable(!newValue || !cbAlignInnerPerimeterStartPointsToOuterPerimeterStartPoint.isSelected()));
 

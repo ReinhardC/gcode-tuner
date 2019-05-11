@@ -41,6 +41,10 @@ public class GCodeCommand extends GCode {
         return contains;
     }
 
+    public boolean hasXY() {
+        return has('X') && has('Y');
+    }
+    
     public void putVector2d(Vector2d v) {
         params.put('X', v.x);
         params.put('Y', v.y);
@@ -64,6 +68,7 @@ public class GCodeCommand extends GCode {
                 (params.containsKey('J') ? "J" + d5.format(params.get('J')) + " " : "") +
                 (params.containsKey('K') ? "K" + d5.format(params.get('K')) + " " : "") +
                 (params.containsKey('P') ? "P" + d0.format(params.get('P')) + " " : "") +
+                (params.containsKey('R') ? "R" + d0.format(params.get('R')) + " " : "") +
                 (params.containsKey('S') ? "S" + d0.format(params.get('S')) + " " : "") +
                 (params.containsKey('T') ? "T" + d0.format(params.get('T')) + " " : "");
 
@@ -81,10 +86,12 @@ public class GCodeCommand extends GCode {
     @Override
     public void serialize(PrintWriter file) { file.write(toString() + "\r\n"); }
 
-    public boolean isPosition() {
-        return (command.equals("G1") || command.equals("G0")) && has('X') && has('Y');
+    public boolean isMoveCommand() { return command.equals("G0") || command.equals("G1") || command.equals("G2") || command.equals("G3"); }
+    
+    public boolean isXYPositioningCommand() {
+        return isMoveCommand() && has('X') && has('Y');
     }
-
+    
     public void set(GCodeCommand in) {
         params.clear();
         in.params.forEach((c, d) -> params.put(c, d));

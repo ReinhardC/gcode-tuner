@@ -19,4 +19,11 @@ public abstract class GCode {
     public void setState(MachineState state) {
         this.state = state;
     }
+
+    public void addCommentTag(String tag) {
+        if (comment == null)
+            comment = "; +" + tag;
+        else
+            comment += " +" + tag;
+    }
 }

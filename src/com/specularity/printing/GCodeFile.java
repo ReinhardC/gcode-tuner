@@ -6,11 +6,11 @@ import javax.vecmath.Vector3d;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.specularity.printing.tuner.log;
-
 class GCodeFile {
+
     public final File file;
 
     List<GCode> gCodes = new ArrayList<>();
@@ -30,103 +30,176 @@ class GCodeFile {
         return -1;
     }
 
+    private void submitAndClearTmp(List<GCode> gCodesTmp, GCode group) {
+        
+        group.setState(gCodesTmp.get(gCodesTmp.size()-1).getState());
+        // gCodesTmp.forEach(gCode -> gCode.setState(null));
+        
+        if(group instanceof GCodeTravel)
+            ((GCodeTravel)group).gCodesTravel.addAll(gCodesTmp);
+        else if(group instanceof GCodeTravelRetracted)
+            ((GCodeTravelRetracted)group).gCodes.addAll(gCodesTmp);
+        else if(group instanceof GCodeExtrusion)
+            ((GCodeExtrusion)group).gCodesMoves.addAll(gCodesTmp);
+        gCodesTmp.clear();
+    }
+
     void load() {
         MachineState currentState = new MachineState();
         String lastMoveCommand = "G1";
+
+         boolean isRetracted = false;
+        
         gCodes.clear();
-        // wtf
-        try (BufferedReader fileStream = new BufferedReader(new InputStreamReader(new DataInputStream(new FileInputStream(file))))) {
-            String strLine;
+
+        GCode collectingGroup = null;
+
+        try (BufferedReader fileStream = new BufferedReader(new InputStreamReader(new DataInputStream(new FileInputStream(file))))) 
+        {
+            List<GCode> gCodesTmp = new ArrayList<>();
+            GCode GCodePrev = null;
+
             int nbLines = 0;
-            GCode lastGCode = null;
+            String strLine;
             while ((strLine = fileStream.readLine()) != null) {
                 nbLines++;
-                List<GCode> gcodes = GCodeFactory.gCodesFromLine(strLine, lastMoveCommand);
-                for (GCode gcode : gcodes) {
-                    if (gcode != null) {
-                        if (gcode instanceof GCodeCommand) {
-                            GCodeCommand cmd = (GCodeCommand) gcode;
-                            boolean skip = false;
-                            if (cmd.command.equals("G0") || cmd.command.equals("G1") || cmd.command.equals("G2") || cmd.command.equals("G3")) 
-                            {
-                                lastMoveCommand = cmd.command;
-                                if (cmd.has('X'))
-                                    currentState.updateX(cmd.get('X'));
-                                if (cmd.has('Y'))
-                                    currentState.updateY(cmd.get('Y'));
-                                if (cmd.has('Z'))
-                                    currentState.updateZ(cmd.get('Z'));
-                                if (cmd.has('F'))
-                                    currentState.updateFeedrate(cmd.get('F'));
-                                if (cmd.has('E'))
-                                    currentState.updateE(cmd.get('E'));
-                            } else if(cmd.command.equals("M83")) {
-                                currentState.setIsAbsoluteExtrusion(false);
-                                gcode = new GCodeComment(";M83 removed by GCodeTuner");
-                            }
-                            else if(cmd.command.equals("M82")) {
-                                currentState.setIsAbsoluteExtrusion(true);
-                            }
-                            else if(cmd.command.equals("G92")) {
-                                if (cmd.has('E') && currentState.isAbsoluteExtrusion()) {
-                                    currentState.setZeroE(currentState.getE() - cmd.get('E'));
-                                    currentState.updateE(cmd.get('E'));
-                                }
-                                if (cmd.has('X')) {
-                                    currentState.setZeroX(currentState.getX() - cmd.get('X'));
-                                    currentState.updateX(cmd.get('X'));
-                                }
-                                if (cmd.has('Y')) {
-                                    currentState.setZeroY(currentState.getY() - cmd.get('Y'));
-                                    currentState.updateY(cmd.get('Y'));
-                                }
-                                if (cmd.has('Z')) {
-                                    currentState.setZeroZ(currentState.getZ() - cmd.get('Z'));
-                                    currentState.updateZ(cmd.get('Z'));
-                                }
-                                gcode = new GCodeComment(";G92 removed by GCodeTuner");
-                            }
+                List<GCode> gCodesLine = GCodeFactory.gCodesFromLine(strLine, lastMoveCommand); // in rare cases, several per line
+                for (GCode gCode : gCodesLine) 
+                {
+                    if (gCode instanceof GCodeCommand) {
+                        GCodeCommand cmd = (GCodeCommand) gCode;
+                        
+                        if (cmd.isMoveCommand()) {
+                            lastMoveCommand = cmd.command; // this is used for the next command-less lines like "X12 Y2 Z19"  
+                            if (cmd.has('X')) currentState.updateX(cmd.get('X'));
+                            if (cmd.has('Y')) currentState.updateY(cmd.get('Y'));
+                            if (cmd.has('Z')) currentState.updateZ(cmd.get('Z'));
+                            if (cmd.has('F')) currentState.updateFeedrate(cmd.get('F'));
+                            if (cmd.has('E')) currentState.updateE(cmd.get('E'));
+                        } 
+                        else if(cmd.command.equals("M83")) {
+                            currentState.setIsAbsoluteExtrusion(false);
+                            gCode = new GCodeComment(";M83 removed by GCodeTuner");
                         }
-
-
-                        currentState.setOriginalLineNumber(nbLines);
-
-                        MachineState newMachineState = new MachineState(currentState);
-                        
-                        gcode.setState(newMachineState);
-                        
-                        if(newMachineState.isRetracted())
-                            if(gcode.comment == null)
-                                gcode.comment = "; +retracted";
-                            else
-                                gcode.comment += " +retracted";
-                                
-                        if(gcode instanceof GCodeCommand && lastGCode != null 
-                                && Math.abs(gcode.getState().getE() - lastGCode.getState().getE()) < 0.000005)
-                                    if(gcode.comment == null)
-                                        gcode.comment = "; +travel";
-                                    else
-                                        gcode.comment += " +travel";
-                        
-                        if(gcode instanceof GCodeCommand && lastGCode != null && lastGCode.getState().isRetracted() 
-                                && Math.abs(gcode.getState().getMaxE() - gcode.getState().getE()) < 0.000005)
-                                    if(gcode.comment == null)
-                                        gcode.comment = "; +end retraction";
-                                    else
-                                        gcode.comment += " +end retraction";
-                            
-                        gCodes.add(gcode);
-
-                        lastGCode = gcode;
+                        else if(cmd.command.equals("M82")) {
+                            currentState.setIsAbsoluteExtrusion(true);
+                        }
+                        else if(cmd.command.equals("G92")) {
+                            if (cmd.has('E') && currentState.isAbsoluteExtrusion()) {
+                                currentState.setZeroE(currentState.getE() - cmd.get('E'));
+                                currentState.updateE(cmd.get('E'));
+                            }
+                            if (cmd.has('X')) {
+                                currentState.setZeroX(currentState.getX() - cmd.get('X'));
+                                currentState.updateX(cmd.get('X'));
+                            }
+                            if (cmd.has('Y')) {
+                                currentState.setZeroY(currentState.getY() - cmd.get('Y'));
+                                currentState.updateY(cmd.get('Y'));
+                            }
+                            if (cmd.has('Z')) {
+                                currentState.setZeroZ(currentState.getZ() - cmd.get('Z'));
+                                currentState.updateZ(cmd.get('Z'));
+                            }
+                            gCode = new GCodeComment(";G92 removed by GCodeTuner");
+                        }
                     }
-                    else log("unrecognized GCode: " + strLine);
-                }
+
+                    currentState.setOriginalLineNumber(nbLines);
+
+                    gCode.setState(new MachineState(currentState));
+
+                    boolean isTraveling = false;
+                    boolean isExtruding = false;
+                    boolean isUnretracting = false;
+                    // isRetracted remains old state until changed
+                    
+                    if(gCode instanceof GCodeCommand) {
+                        GCodeCommand cmd = ((GCodeCommand) gCode);
+                        isTraveling = cmd.isMoveCommand() && GCodePrev != null && cmd.hasXY() && gCode.getState().getE() - GCodePrev.getState().getE() < 0.000005; // moved but didn't extrude
+                        isExtruding = cmd.isMoveCommand() && GCodePrev != null && !GCodePrev.getState().checkRetracted() && gCode.getState().getE() - GCodePrev.getState().getE() >= 0.000005; // TODO: test coasting
+                        isRetracted = gCode.getState().checkRetracted();
+                        isUnretracting = GCodePrev != null && GCodePrev.getState().checkRetracted() && !gCode.getState().checkRetracted();
+                    }
+
+                    if (isTraveling && !(isRetracted|| isUnretracting) ) {
+                        if(!(collectingGroup instanceof GCodeTravel)) {
+                            if(collectingGroup != null) {
+                                submitAndClearTmp(gCodesTmp, collectingGroup);
+                                gCodes.add(collectingGroup);
+                            }
+                            collectingGroup = new GCodeTravel();
+                        }
+                        gCodesTmp.add(gCode);
+                    } else if (isRetracted|| isUnretracting) {
+                        if(!(collectingGroup instanceof GCodeTravelRetracted)) {
+                            if(collectingGroup != null) {
+                                submitAndClearTmp(gCodesTmp, collectingGroup);
+                                gCodes.add(collectingGroup);
+                            }
+                            collectingGroup = new GCodeTravelRetracted();
+                        }
+                        gCodesTmp.add(gCode);
+                    } else if(isExtruding) {
+                        if(!(collectingGroup instanceof GCodeExtrusion)) {
+                            if(collectingGroup != null) {
+                                submitAndClearTmp(gCodesTmp, collectingGroup);
+                                gCodes.add(collectingGroup);
+                            }
+                            collectingGroup = new GCodeExtrusion();
+                        }
+                        gCodesTmp.add(gCode);
+                    } else {
+                        if(collectingGroup != null) {
+                            submitAndClearTmp(gCodesTmp, collectingGroup);
+                            gCodes.add(collectingGroup);
+                        }
+                        gCodes.add(gCode);
+                        collectingGroup = null;
+                    }
+                    GCodePrev = gCode;
+                } 
+            } 
+
+            if(collectingGroup != null) {
+                submitAndClearTmp(gCodesTmp, collectingGroup);
+                gCodes.add(collectingGroup);
             }
+
+            System.out.print("\033[H\033[2J");
+            
+            // resample retraction test
+            
+            double initialRetraction = 1;
+            double retractionPerMmTraveled = 0.5;
+            
+            List<GCodeTravelRetracted> retractions = gCodes.stream().filter(gCode -> gCode instanceof GCodeTravelRetracted).map(gCode -> (GCodeTravelRetracted) gCode).collect(Collectors.toList());
+            for (GCodeTravelRetracted retraction: retractions) 
+            {
+                List<GCodeCommand> moves = retraction.gCodes.stream().filter(gCodeCmd -> {
+                    return gCodeCmd instanceof GCodeCommand 
+                            && (((GCodeCommand) gCodeCmd).isXYPositioningCommand() 
+                            || ((GCodeCommand) gCodeCmd).has('E'));
+                }).map(gCodeCmd->(GCodeCommand)gCodeCmd).collect(Collectors.toList());
+
+                MachineState state = moves.get(0).getState();
+                double d = state.getMaxE() - state.getE(); 
+                 moves.get(0).put('E', 123.0);//state.getMaxE() - initialRetraction);
+                 moves.get(moves.size()-1).put('E', state.getMaxE());
+                
+                for (GCodeCommand move : moves) {
+                    System.out.println(retraction.getState().getOriginalLineNumber() + ": " + (GCodeCommand)move);
+                }
+                System.out.println("------------------------");
+            }
+            
         } catch (FileNotFoundException ignored) {
         } catch (IOException e) {
             e.printStackTrace();
         }
 
+        // group commands into ExtrudedPaths
+        
         //
         //              group commands into perimeters, and perimeters into perimeter groups
         //
@@ -265,7 +338,6 @@ class GCodeFile {
             lastToolheadPosition.set(currentToolheadPosition);
         }
         */
-        return;
     }
 
     Stream<GCode> getPerimeters() {
@@ -273,8 +345,14 @@ class GCodeFile {
     }
 
     private void serialize(PrintWriter file) throws IOException {
-
-        for (GCode gCode : gCodes) gCode.serialize(file);
+        int i=0;
+        for (GCode gCode : gCodes) {
+            i++;
+            if(gCode!=null)
+                gCode.serialize(file);
+            else
+                gCode.serialize(file);
+        }
     }
 
     String writeCopy() {

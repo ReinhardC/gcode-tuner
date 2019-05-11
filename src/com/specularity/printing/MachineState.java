@@ -3,6 +3,8 @@ package com.specularity.printing;
 import javax.vecmath.Vector2d;
 import javax.vecmath.Vector3d;
 
+import static com.specularity.printing.tuner.preferences;
+
 public class MachineState {
     @Override
     public String toString() {
@@ -162,7 +164,7 @@ public class MachineState {
         this.zeroPosition.z = z;
     }
     
-    public boolean isRetracted() { return this.maxE > this.getE(); }
+    public boolean checkRetracted() { return this.maxE > this.getE() + preferences.getDouble("extrusionRestartDistance", 0.0); }
 }
 
     

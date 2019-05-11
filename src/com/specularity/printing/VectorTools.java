@@ -95,6 +95,9 @@ public class VectorTools {
         }
     }
 
+    /**
+     * e.g. l = getCycleLength(gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand).map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList()));
+     */
     public static double getCycleLength(List<Vector2d> input)
     {
         double totalLength = getPathLength(input);
@@ -106,7 +109,10 @@ public class VectorTools {
         return totalLength;
 
     }
-
+    
+    /**
+     * e.g. l = getPathLength(gCodes.stream().filter(gCode1 -> gCode1 instanceof GCodeCommand).map(gCode1 -> gCode1.getState().getXY()).collect(Collectors.toList()));
+     */
     public static double getPathLength(List<Vector2d> input)
     {
         double totalLength = 0.0;
